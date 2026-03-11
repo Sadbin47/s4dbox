@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # s4dbox - System detection and package manager abstraction
 # Detects OS, arch, package manager, init system
-
-set -euo pipefail
+# NOTE: Do NOT use 'set -e' here — this file is sourced by s4dbox,
+# and tui_draw_menu returns selection index via exit code (>0 is valid).
 
 # ─── OS Detection ───
 detect_os() {
@@ -235,7 +235,7 @@ get_local_ip() {
     echo "127.0.0.1"
 }
 
-# ─── Print System Summary ───
+# ─── Print System Summary (basic) ───
 print_system_info() {
     msg_header "System Information"
     printf "  %-18s %s\n" "OS:" "$S4D_OS_PRETTY"
@@ -246,5 +246,107 @@ print_system_info() {
     printf "  %-18s %s\n" "Virtualization:" "$S4D_VIRT"
     printf "  %-18s %s\n" "Network Interface:" "$S4D_NIC"
     printf "  %-18s %s MB\n" "Total Memory:" "$S4D_MEM_TOTAL_MB"
+    echo
+}
+
+# ─── Detailed System Info (benchmark-style) ───
+print_system_info_full() {
+    clear
+
+    # CPU info
+    local cpu_model cpu_cores cpu_mhz cpu_cache aes_ni vmx
+    cpu_model="$(awk -F': ' '/^model name/{print $2; exit}' /proc/cpuinfo 2>/dev/null)"
+    cpu_model="${cpu_model:-Unknown}"
+    cpu_cores="$(nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)"
+    cpu_mhz="$(awk -F': ' '/^cpu MHz/{printf "%.3f", $2; exit}' /proc/cpuinfo 2>/dev/null)"
+    cpu_cache="$(awk -F': ' '/^cache size/{print $2; exit}' /proc/cpuinfo 2>/dev/null)"
+    [[ -z "$cpu_cache" ]] && cpu_cache="$(lscpu 2>/dev/null | awk -F': +' '/L3 cache/{print $2}')"
+    [[ -z "$cpu_cache" ]] && cpu_cache="N/A"
+
+    if grep -qi 'aes' /proc/cpuinfo 2>/dev/null; then
+        aes_ni="${GREEN}✔ Enabled${RESET}"
+    else
+        aes_ni="${RED}❌ Disabled${RESET}"
+    fi
+
+    if grep -qE 'vmx|svm' /proc/cpuinfo 2>/dev/null; then
+        vmx="${GREEN}✔ Enabled${RESET}"
+    else
+        vmx="${RED}❌ Disabled${RESET}"
+    fi
+
+    # Disk info
+    local disk_total disk_used
+    disk_total="$(df -h --total 2>/dev/null | awk '/^total/{print $2}')"
+    disk_used="$(df -h --total 2>/dev/null | awk '/^total/{print $3}')"
+    [[ -z "$disk_total" ]] && disk_total="N/A"
+    [[ -z "$disk_used" ]] && disk_used="N/A"
+
+    # Memory
+    local mem_total_h mem_used_h swap_total_h swap_used_h
+    local mt mf ma st sf
+    mt=0; mf=0; ma=0; st=0; sf=0
+    while IFS=': ' read -r k v _; do
+        case "$k" in
+            MemTotal) mt=$v;; MemAvailable) ma=$v;;
+            SwapTotal) st=$v;; SwapFree) sf=$v;;
+        esac
+    done < /proc/meminfo
+    local mu=$(( mt - ma )) su=$(( st - sf ))
+    mem_total_h="$(awk "BEGIN{printf \"%.1f GB\", $mt/1048576}")"
+    mem_used_h="$(awk "BEGIN{printf \"%.1f GB\", $mu/1048576}")"
+    swap_total_h="$(awk "BEGIN{printf \"%.1f GB\", $st/1048576}")"
+    swap_used_h="$(awk "BEGIN{printf \"%.1f GB\", $sf > 0 ? $su/1048576 : 0}")"
+
+    # Uptime
+    local seconds days hours mins
+    seconds=$(awk '{print int($1)}' /proc/uptime 2>/dev/null)
+    days=$(( seconds / 86400 ))
+    hours=$(( (seconds % 86400) / 3600 ))
+    mins=$(( (seconds % 3600) / 60 ))
+    local uptime_str="${days} days, ${hours} hour ${mins} min"
+
+    # Load
+    local loadavg
+    loadavg="$(awk '{printf "%s, %s, %s", $1, $2, $3}' /proc/loadavg 2>/dev/null)"
+
+    # Kernel
+    local kernel
+    kernel="$(uname -r)"
+
+    # Virt type (uppercase)
+    local virt_name
+    virt_name="$(echo "${S4D_VIRT:-none}" | tr '[:lower:]' '[:upper:]')"
+
+    # TCP congestion control
+    local tcp_cc
+    tcp_cc="$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null || echo 'N/A')"
+
+    # Render
+    local W=68
+    printf "\n"
+    printf "  ${BOLD}${CYAN}"
+    printf ' ---------------------------------------------------------------------------\n'
+    printf '  Basic System Info\n'
+    printf ' ---------------------------------------------------------------------------\n'
+    printf "  ${RESET}"
+    printf "  %-20s: %s\n" " CPU Model" "$cpu_model"
+    printf "  %-20s: %s @ %s MHz\n" " CPU Cores" "$cpu_cores" "${cpu_mhz:-N/A}"
+    printf "  %-20s: %s\n" " CPU Cache" "$cpu_cache"
+    printf "  %-20s: %b\n" " AES-NI" "$aes_ni"
+    printf "  %-20s: %b\n" " VM-x/AMD-V" "$vmx"
+    printf "  %-20s: %s (%s Used)\n" " Total Disk" "$disk_total" "$disk_used"
+    printf "  %-20s: %s (%s Used)\n" " Total RAM" "$mem_total_h" "$mem_used_h"
+    printf "  %-20s: %s (%s Used)\n" " Total Swap" "$swap_total_h" "$swap_used_h"
+    printf "  %-20s: %s\n" " System uptime" "$uptime_str"
+    printf "  %-20s: %s\n" " Load average" "$loadavg"
+    printf "  %-20s: %s\n" " OS" "$S4D_OS_PRETTY"
+    printf "  %-20s: %s (%s Bit)\n" " Arch" "$S4D_ARCH" "$(getconf LONG_BIT 2>/dev/null || echo 64)"
+    printf "  %-20s: %s\n" " Kernel" "$kernel"
+    printf "  %-20s: %s\n" " Virtualization" "$virt_name"
+    printf "  %-20s: %s\n" " TCP Control" "$tcp_cc"
+    printf "  ${BOLD}${CYAN}"
+    printf ' ---------------------------------------------------------------------------\n'
+    printf "  ${RESET}"
     echo
 }

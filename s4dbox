@@ -373,6 +373,7 @@ main_menu() {
         show_banner
         
         local options=(
+            "System Info"
             "System Monitor"
             "Application Manager"
             "System Tuning"
@@ -388,15 +389,16 @@ main_menu() {
         local choice=$?
         
         case $choice in
-            0) monitor_live ;;
-            1) app_menu_manage ;;
-            2) tune_menu ;;
-            3) nginx_menu ;;
-            4) security_menu ;;
-            5) storage_menu ;;
-            6) network_menu ;;
-            7) settings_menu ;;
-            8|255)
+            0) print_system_info_full; tui_pause ;;
+            1) monitor_live ;;
+            2) app_menu_manage ;;
+            3) tune_menu ;;
+            4) nginx_menu ;;
+            5) security_menu ;;
+            6) storage_menu ;;
+            7) network_menu ;;
+            8) settings_menu ;;
+            9|255)
                 clear
                 msg_info "s4dbox exiting. Goodbye!"
                 log_info "s4dbox session ended"
