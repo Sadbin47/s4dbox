@@ -22,23 +22,41 @@ install_plex() {
             ;;
         arch)
             spinner_start "Installing Plex"
-            # Try AUR helpers in order: yay, paru, then manual
+            # Try AUR helpers in order: yay, paru, then manual AUR build
             if command -v yay &>/dev/null; then
                 sudo -u "$username" yay -S --noconfirm plex-media-server 2>/dev/null
+                spinner_stop $?
             elif command -v paru &>/dev/null; then
                 sudo -u "$username" paru -S --noconfirm plex-media-server 2>/dev/null
+                spinner_stop $?
             else
-                # Install via Flatpak as fallback
-                if command -v flatpak &>/dev/null || pkg_install flatpak 2>/dev/null; then
-                    flatpak install -y --noninteractive flathub tv.plex.PlexMediaServer 2>/dev/null
+                # Build directly from AUR without a helper
+                spinner_stop 0
+                msg_info "No AUR helper found — building plex-media-server from AUR directly"
+                # Ensure base-devel + git are installed
+                pacman -S --needed --noconfirm base-devel git &>/dev/null
+                local build_dir="/tmp/s4dbox-plex-aur"
+                rm -rf "$build_dir"
+                mkdir -p "$build_dir"
+                chown "$username":"$username" "$build_dir"
+                if sudo -u "$username" git clone https://aur.archlinux.org/plex-media-server.git "$build_dir/plex-media-server" 2>/dev/null; then
+                    pushd "$build_dir/plex-media-server" >/dev/null
+                    if sudo -u "$username" makepkg -si --noconfirm 2>&1; then
+                        msg_ok "Built plex-media-server from AUR"
+                    else
+                        msg_error "Failed to build plex-media-server from AUR"
+                        popd >/dev/null
+                        rm -rf "$build_dir"
+                        return 1
+                    fi
+                    popd >/dev/null
+                    rm -rf "$build_dir"
                 else
-                    spinner_stop 1
-                    msg_error "Plex requires an AUR helper (yay/paru) or flatpak on Arch"
-                    msg_info "Install with: yay -S plex-media-server"
+                    msg_error "Failed to clone plex-media-server AUR repo"
+                    rm -rf "$build_dir"
                     return 1
                 fi
             fi
-            spinner_stop $?
             ;;
         rhel)
             spinner_start "Adding Plex repository"
