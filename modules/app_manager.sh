@@ -120,7 +120,11 @@ app_status() {
     # Try systemd service check
     local service_name
     case "$app" in
-        qbittorrent) service_name="qbittorrent-nox@*" ;;
+        qbittorrent)
+            local _qb_user
+            _qb_user="$(get_seedbox_user)"
+            service_name="qbittorrent-nox@${_qb_user}"
+            ;;
         jellyfin)    service_name="jellyfin" ;;
         plex)        
             # Service name varies by distro/install method
@@ -133,10 +137,19 @@ app_status() {
             service_name="${service_name:-plexmediaserver}"
             ;;
         filebrowser) service_name="filebrowser" ;;
-        rtorrent)    service_name="rtorrent@*" ;;
+        rtorrent)
+            local _rt_user
+            _rt_user="$(get_seedbox_user)"
+            service_name="rtorrent@${_rt_user}"
+            ;;
         rutorrent)
-            # ruTorrent is a PHP web app served by nginx — check nginx + php-fpm
-            if systemctl is-active nginx &>/dev/null && [[ -d /var/www/rutorrent ]]; then
+            # ruTorrent is a PHP web app served by nginx + php-fpm + rTorrent
+            local _php_svc
+            _php_svc="$(systemctl list-unit-files 2>/dev/null | grep -oP 'php[0-9.]*-fpm\.service' | head -1)"
+            [[ -z "$_php_svc" ]] && _php_svc="php-fpm.service"
+            if systemctl is-active nginx &>/dev/null \
+               && systemctl is-active "$_php_svc" &>/dev/null \
+               && [[ -d /var/www/rutorrent ]]; then
                 echo "running"
             else
                 echo "stopped"

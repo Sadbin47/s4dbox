@@ -15,17 +15,14 @@ install_rtorrent() {
     case "$S4D_DISTRO_FAMILY" in
         debian)
             pkg_install rtorrent
-            pkg_install screen
             ;;
         arch)
             pkg_install rtorrent
-            pkg_install screen
             ;;
         rhel)
             # May need EPEL
             pkg_install epel-release 2>/dev/null || true
             pkg_install rtorrent
-            pkg_install screen
             ;;
     esac
     spinner_stop $?
@@ -76,6 +73,9 @@ pieces.hash.on_completion.set = yes
 encoding.add = UTF-8
 system.umask.set = 0022
 
+# Run as daemon (no ncurses, controlled via SCGI/ruTorrent)
+system.daemon.set = true
+
 # DHT
 dht.mode.set = disable
 protocol.pex.set = no
@@ -84,19 +84,18 @@ EOF
 
     chown "${username}:${username}" "/home/${username}/.rtorrent.rc"
 
-    # Create systemd service
+    # Create systemd service (daemon mode — no screen needed)
     cat > /etc/systemd/system/rtorrent@.service <<EOF
 [Unit]
 Description=rTorrent for %i
 After=network.target
 
 [Service]
-Type=forking
+Type=simple
 User=%i
-KillMode=none
 ExecStartPre=-/bin/rm -f /home/%i/rtorrent/session/rtorrent.lock
-ExecStart=/usr/bin/screen -d -m -fa -S rtorrent /usr/bin/rtorrent
-ExecStop=/usr/bin/killall -w -s INT rtorrent
+ExecStart=/usr/bin/rtorrent
+ExecStop=/bin/kill -s INT \$MAINPID
 Restart=on-failure
 RestartSec=10
 
