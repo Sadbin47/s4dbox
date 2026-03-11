@@ -293,10 +293,10 @@ print_system_info_full() {
         esac
     done < /proc/meminfo
     local mu=$(( mt - ma )) su=$(( st - sf ))
-    mem_total_h="$(awk "BEGIN{printf \"%.1f GB\", $mt/1048576}")"
-    mem_used_h="$(awk "BEGIN{printf \"%.1f GB\", $mu/1048576}")"
-    swap_total_h="$(awk "BEGIN{printf \"%.1f GB\", $st/1048576}")"
-    swap_used_h="$(awk "BEGIN{printf \"%.1f GB\", $sf > 0 ? $su/1048576 : 0}")"
+    mem_total_h="$(awk -v v="$mt" 'BEGIN{printf "%.1f GB", v/1048576}')"
+    mem_used_h="$(awk -v v="$mu" 'BEGIN{printf "%.1f GB", v/1048576}')"
+    swap_total_h="$(awk -v v="$st" 'BEGIN{printf "%.1f GB", v/1048576}')"
+    swap_used_h="$(awk -v t="$st" -v u="$su" 'BEGIN{printf "%.1f GB", t > 0 ? u/1048576 : 0}')"
 
     # Uptime
     local seconds days hours mins
