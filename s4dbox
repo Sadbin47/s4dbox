@@ -16,7 +16,7 @@
 #
 #═══════════════════════════════════════════════════════════════════════════════
 
-set -euo pipefail
+set -uo pipefail
 
 S4D_VERSION="1.0.0"
 
@@ -148,13 +148,13 @@ first_time_setup() {
     
     # Tuning
     if tui_confirm "Apply system tuning for optimal seedbox performance?"; then
-        tune_apply_all
+        tune_apply_all || true
     fi
     
     # Nginx
     if tui_confirm "Setup Nginx reverse proxy?"; then
-        nginx_install
-        nginx_create_main_server
+        nginx_install || true
+        nginx_create_main_server || true
         for app in qbittorrent jellyfin plex filebrowser; do
             app_is_installed "$app" && "nginx_${app}" 2>/dev/null || true
         done
@@ -162,6 +162,7 @@ first_time_setup() {
     
     # Security
     if tui_confirm "Apply SSH security hardening and firewall?"; then
+        ssh_harden || true
         security_fail2ban || true
         firewall_setup || true
     fi

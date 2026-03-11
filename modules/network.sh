@@ -27,10 +27,23 @@ network_status() {
     
     echo
     
-    # Show speed
-    echo "  Testing network speed..."
-    read -r rx tx <<< "$(get_network_speed)"
-    printf "  %-18s ↓ %s  ↑ %s\n" "Current Speed:" "$(format_speed "$rx")" "$(format_speed "$tx")"
+    # Show speed (sample for 1 second)
+    echo "  Measuring network throughput..."
+    local nic
+    nic="$(ip -o link show up 2>/dev/null | awk -F': ' '!/lo/{print $2; exit}' | cut -d'@' -f1)"
+    if [[ -n "$nic" ]]; then
+        local r1 t1 r2 t2
+        r1=$(< "/sys/class/net/${nic}/statistics/rx_bytes")
+        t1=$(< "/sys/class/net/${nic}/statistics/tx_bytes")
+        sleep 1
+        r2=$(< "/sys/class/net/${nic}/statistics/rx_bytes")
+        t2=$(< "/sys/class/net/${nic}/statistics/tx_bytes")
+        local rx_kb=$(( (r2 - r1) / 1024 ))
+        local tx_kb=$(( (t2 - t1) / 1024 ))
+        printf "  %-18s ↓ %d KB/s  ↑ %d KB/s\n" "Current Speed:" "$rx_kb" "$tx_kb"
+    else
+        printf "  %-18s N/A\n" "Current Speed:"
+    fi
     echo
 }
 

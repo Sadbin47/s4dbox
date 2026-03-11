@@ -1,136 +1,52 @@
 #!/usr/bin/env bash
 # s4dbox - System Monitoring Module
-# Reads directly from /proc and /sys for minimal resource usage
-# No heavy dependencies — pure bash + coreutils
+# Live dashboard: CPU, RAM, Swap, Disk, Network, Buffers
+# Reads from /proc and /sys — pure bash, refreshes every ~1s
 
-# ─── CPU Usage ───
-get_cpu_usage() {
-    local cpu_line1 cpu_line2
-    local user1 nice1 system1 idle1 iowait1 irq1 softirq1 steal1
-    local user2 nice2 system2 idle2 iowait2 irq2 softirq2 steal2
-    local total1 total2 idle_total1 idle_total2 diff_total diff_idle
+# ─── Draw a bar ───
+# Uses printf '%s' to avoid format-character bugs
+_bar() {
+    local pct=${1:-0} width=${2:-30}
+    local filled=$(( pct * width / 100 ))
+    [[ $filled -gt $width ]] && filled=$width
+    local empty=$(( width - filled ))
+    local color
+    if [[ $pct -lt 50 ]]; then color="$GREEN"
+    elif [[ $pct -lt 80 ]]; then color="$YELLOW"
+    else color="$RED"; fi
 
-    read -r _ user1 nice1 system1 idle1 iowait1 irq1 softirq1 steal1 _ < /proc/stat
-    sleep 0.5
-    read -r _ user2 nice2 system2 idle2 iowait2 irq2 softirq2 steal2 _ < /proc/stat
+    local bar=""
+    local i
+    for (( i=0; i<filled; i++ )); do bar+="█"; done
+    for (( i=0; i<empty;  i++ )); do bar+="░"; done
+    printf '%s%s%s%s%s %3d%%' "$color" "" "$bar" "$RESET" "" "$pct"
+}
 
-    total1=$(( user1 + nice1 + system1 + idle1 + iowait1 + irq1 + softirq1 + steal1 ))
-    total2=$(( user2 + nice2 + system2 + idle2 + iowait2 + irq2 + softirq2 + steal2 ))
-    idle_total1=$(( idle1 + iowait1 ))
-    idle_total2=$(( idle2 + iowait2 ))
-    
-    diff_total=$(( total2 - total1 ))
-    diff_idle=$(( idle_total2 - idle_total1 ))
-
-    if [[ $diff_total -gt 0 ]]; then
-        echo $(( (diff_total - diff_idle) * 100 / diff_total ))
+# ─── Format bytes/sec into human-readable ───
+_fmt_speed() {
+    local val=${1:-0}
+    if [[ $val -ge 1048576 ]]; then
+        local gb=$(( val * 10 / 1048576 ))
+        printf '%d.%d GB/s' "$(( gb / 10 ))" "$(( gb % 10 ))"
+    elif [[ $val -ge 1024 ]]; then
+        local mb=$(( val * 10 / 1024 ))
+        printf '%d.%d MB/s' "$(( mb / 10 ))" "$(( mb % 10 ))"
     else
-        echo 0
+        printf '%d KB/s' "$val"
     fi
 }
 
-# ─── CPU Core Count ───
-get_cpu_cores() {
-    nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1
-}
-
-# ─── CPU Load Average ───
-get_load_average() {
-    awk '{printf "%s %s %s", $1, $2, $3}' /proc/loadavg 2>/dev/null
-}
-
-# ─── RAM Usage ───
-get_ram_info() {
-    local total available used percent
-    total=$(awk '/^MemTotal:/{print $2}' /proc/meminfo)
-    available=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)
-    used=$(( total - available ))
-    percent=$(( used * 100 / total ))
-    
-    # Convert to MB
-    local used_mb=$(( used / 1024 ))
-    local total_mb=$(( total / 1024 ))
-    
-    printf "%d %d %d" "$used_mb" "$total_mb" "$percent"
-}
-
-# ─── Disk Usage ───
-get_disk_usage() {
-    df -h --output=source,size,used,avail,pcent,target 2>/dev/null | \
-        grep -E '^/dev/' | \
-        awk '{printf "%-12s %6s %6s %6s %5s %s\n", $1, $2, $3, $4, $5, $6}'
-}
-
-# ─── Disk Count ───
-get_disk_count() {
-    lsblk -d -n -o NAME,TYPE 2>/dev/null | grep -c 'disk' || echo 0
-}
-
-# ─── Disk IO ───
-get_disk_io() {
-    # Read /proc/diskstats twice with interval
-    local read1 write1 read2 write2
-    local dev
-    
-    dev=$(lsblk -d -n -o NAME | head -1)
-    [[ -z "$dev" ]] && { echo "0 0"; return; }
-
-    read1=$(awk -v d="$dev" '$3==d{print $6}' /proc/diskstats)
-    write1=$(awk -v d="$dev" '$3==d{print $10}' /proc/diskstats)
-    sleep 1
-    read2=$(awk -v d="$dev" '$3==d{print $6}' /proc/diskstats)
-    write2=$(awk -v d="$dev" '$3==d{print $10}' /proc/diskstats)
-
-    # Sectors are 512 bytes, convert to KB/s
-    local read_kbs=$(( (read2 - read1) * 512 / 1024 ))
-    local write_kbs=$(( (write2 - write1) * 512 / 1024 ))
-    
-    printf "%d %d" "$read_kbs" "$write_kbs"
-}
-
-# ─── Network Speed ───
-get_network_speed() {
-    local nic="${1:-$S4D_NIC}"
-    [[ -z "$nic" ]] && nic="$(ip -o link show up 2>/dev/null | awk -F': ' '!/lo/{print $2; exit}' | cut -d'@' -f1)"
-    [[ -z "$nic" ]] && { echo "0 0"; return; }
-
-    local rx1 tx1 rx2 tx2
-    rx1=$(cat "/sys/class/net/${nic}/statistics/rx_bytes" 2>/dev/null || echo 0)
-    tx1=$(cat "/sys/class/net/${nic}/statistics/tx_bytes" 2>/dev/null || echo 0)
-    sleep 1
-    rx2=$(cat "/sys/class/net/${nic}/statistics/rx_bytes" 2>/dev/null || echo 0)
-    tx2=$(cat "/sys/class/net/${nic}/statistics/tx_bytes" 2>/dev/null || echo 0)
-
-    local rx_kbs=$(( (rx2 - rx1) / 1024 ))
-    local tx_kbs=$(( (tx2 - tx1) / 1024 ))
-
-    printf "%d %d" "$rx_kbs" "$tx_kbs"
-}
-
-# ─── IO Wait ───
-get_iowait() {
-    local iowait1 iowait2 total1 total2
-    read -r _ _ _ _ _ iowait1 _ < /proc/stat
-    local line1
-    line1=$(head -1 /proc/stat)
-    local sum1=0
-    for val in ${line1#cpu }; do sum1=$(( sum1 + val )); done
-    
-    sleep 0.5
-    
-    local line2
-    line2=$(head -1 /proc/stat)
-    read -r _ _ _ _ _ iowait2 _ <<< "$line2"
-    local sum2=0
-    for val in ${line2#cpu }; do sum2=$(( sum2 + val )); done
-
-    local diff_total=$(( sum2 - sum1 ))
-    local diff_iowait=$(( iowait2 - iowait1 ))
-
-    if [[ $diff_total -gt 0 ]]; then
-        echo $(( diff_iowait * 100 / diff_total ))
+# ─── Format size in KB to human ───
+_fmt_size() {
+    local kb=${1:-0}
+    if [[ $kb -ge 1048576 ]]; then
+        local gb=$(( kb * 10 / 1048576 ))
+        printf '%d.%d GB' "$(( gb / 10 ))" "$(( gb % 10 ))"
+    elif [[ $kb -ge 1024 ]]; then
+        local mb=$(( kb * 10 / 1024 ))
+        printf '%d.%d MB' "$(( mb / 10 ))" "$(( mb % 10 ))"
     else
-        echo 0
+        printf '%d KB' "$kb"
     fi
 }
 
@@ -141,111 +57,194 @@ get_uptime() {
     local days=$(( seconds / 86400 ))
     local hours=$(( (seconds % 86400) / 3600 ))
     local mins=$(( (seconds % 3600) / 60 ))
-    printf "%dd %dh %dm" "$days" "$hours" "$mins"
+    printf '%dd %dh %dm' "$days" "$hours" "$mins"
 }
 
-# ─── Format Speed ───
-format_speed() {
-    local kbs=$1
-    if [[ $kbs -ge 1048576 ]]; then
-        printf "%.1f GB/s" "$(echo "scale=1; $kbs / 1048576" | bc)"
-    elif [[ $kbs -ge 1024 ]]; then
-        printf "%.1f MB/s" "$(echo "scale=1; $kbs / 1024" | bc)"
-    else
-        printf "%d KB/s" "$kbs"
-    fi
+# ─── Detect primary NIC ───
+_detect_nic() {
+    ip -o link show up 2>/dev/null | awk -F': ' '!/lo/{print $2; exit}' | cut -d'@' -f1
 }
 
-# ─── Progress Bar ───
-draw_bar() {
-    local percent=$1
-    local width=${2:-30}
-    local filled=$(( percent * width / 100 ))
-    local empty=$(( width - filled ))
-    local color
-
-    if [[ $percent -lt 50 ]]; then
-        color="$GREEN"
-    elif [[ $percent -lt 80 ]]; then
-        color="$YELLOW"
-    else
-        color="$RED"
-    fi
-
-    printf "${color}"
-    printf '█%.0s' $(seq 1 $filled 2>/dev/null) 2>/dev/null
-    printf "${DIM}"
-    printf '░%.0s' $(seq 1 $empty 2>/dev/null) 2>/dev/null
-    printf "${RESET}"
-    printf " %3d%%" "$percent"
-}
-
-# ─── Full Dashboard (single snapshot) ───
-monitor_snapshot() {
-    local cpu_pct ram_info ram_used ram_total ram_pct
-    local io_info io_read io_write
-    local net_info net_rx net_tx
-    local iowait uptime disk_count cores load
-
-    cores=$(get_cpu_cores)
-    load=$(get_load_average)
-    uptime=$(get_uptime)
-    disk_count=$(get_disk_count)
-    cpu_pct=$(get_cpu_usage)
-    
-    read -r ram_used ram_total ram_pct <<< "$(get_ram_info)"
-    
-    iowait=$(get_iowait)
-    
-    read -r io_read io_write <<< "$(get_disk_io)"
-    read -r net_rx net_tx <<< "$(get_network_speed)"
-
-    clear
-    printf "\n"
-    printf "  ${BOLD}${CYAN}┌──────────────────────────────────────────────────────────┐${RESET}\n"
-    printf "  ${BOLD}${CYAN}│${RESET}  ${BOLD}s4dbox System Monitor${RESET}             Uptime: %-14s ${BOLD}${CYAN}│${RESET}\n" "$uptime"
-    printf "  ${BOLD}${CYAN}├──────────────────────────────────────────────────────────┤${RESET}\n"
-    printf "  ${BOLD}${CYAN}│${RESET}                                                          ${BOLD}${CYAN}│${RESET}\n"
-    printf "  ${BOLD}${CYAN}│${RESET}  ${BOLD}CPU${RESET}  [$(draw_bar "$cpu_pct" 25)]  %d cores    ${BOLD}${CYAN}│${RESET}\n" "$cores"
-    printf "  ${BOLD}${CYAN}│${RESET}  ${BOLD}RAM${RESET}  [$(draw_bar "$ram_pct" 25)]  %dMB/%dMB  ${BOLD}${CYAN}│${RESET}\n" "$ram_used" "$ram_total"
-    printf "  ${BOLD}${CYAN}│${RESET}  ${BOLD}IO ${RESET}  Wait: %2d%%                                        ${BOLD}${CYAN}│${RESET}\n" "$iowait"
-    printf "  ${BOLD}${CYAN}│${RESET}  ${BOLD}Load${RESET} %s                                    ${BOLD}${CYAN}│${RESET}\n" "$load"
-    printf "  ${BOLD}${CYAN}│${RESET}                                                          ${BOLD}${CYAN}│${RESET}\n"
-    printf "  ${BOLD}${CYAN}├──────────────────────────────────────────────────────────┤${RESET}\n"
-    printf "  ${BOLD}${CYAN}│${RESET}  ${BOLD}Disk IO${RESET}    Read: $(format_speed "$io_read")   Write: $(format_speed "$io_write")\n"
-    printf "  ${BOLD}${CYAN}│${RESET}  ${BOLD}Network${RESET}    ↓ $(format_speed "$net_rx")     ↑ $(format_speed "$net_tx")\n"
-    printf "  ${BOLD}${CYAN}│${RESET}  ${BOLD}Disks${RESET}      %d detected\n" "$disk_count"
-    printf "  ${BOLD}${CYAN}│${RESET}                                                          ${BOLD}${CYAN}│${RESET}\n"
-    printf "  ${BOLD}${CYAN}├──────────────────────────────────────────────────────────┤${RESET}\n"
-    printf "  ${BOLD}${CYAN}│${RESET}  ${DIM}Disk Usage:${RESET}\n"
-    
-    while IFS= read -r line; do
-        printf "  ${BOLD}${CYAN}│${RESET}    %s\n" "$line"
-    done <<< "$(get_disk_usage)"
-    
-    printf "  ${BOLD}${CYAN}│${RESET}                                                          ${BOLD}${CYAN}│${RESET}\n"
-    printf "  ${BOLD}${CYAN}└──────────────────────────────────────────────────────────┘${RESET}\n"
-    printf "\n  ${DIM}Press 'q' to return to menu${RESET}\n"
-}
-
-# ─── Live Monitor Loop ───
+# ─── Live monitor ───
 monitor_live() {
+    local nic
+    nic="$(_detect_nic)"
+
+    # Stash initial CPU counters
+    local cpu_u1 cpu_n1 cpu_s1 cpu_i1 cpu_w1 cpu_q1 cpu_si1 cpu_st1
+    read -r _ cpu_u1 cpu_n1 cpu_s1 cpu_i1 cpu_w1 cpu_q1 cpu_si1 cpu_st1 _ < /proc/stat
+
+    # Stash initial net counters
+    local rx1=0 tx1=0
+    if [[ -n "$nic" ]]; then
+        rx1=$(< "/sys/class/net/${nic}/statistics/rx_bytes")
+        tx1=$(< "/sys/class/net/${nic}/statistics/tx_bytes")
+    fi
+
+    # Stash initial disk IO
+    local dev
+    dev=$(lsblk -dn -o NAME 2>/dev/null | head -1)
+    local dr1=0 dw1=0
+    if [[ -n "$dev" ]]; then
+        dr1=$(awk -v d="$dev" '$3==d{print $6}' /proc/diskstats 2>/dev/null)
+        dw1=$(awk -v d="$dev" '$3==d{print $10}' /proc/diskstats 2>/dev/null)
+    fi
+
     local running=1
-    
-    # Set terminal to raw mode for non-blocking input
-    stty -echo -icanon min 0 time 0 2>/dev/null || true
-    
+    trap 'running=0' INT TERM
+
     while [[ $running -eq 1 ]]; do
-        monitor_snapshot
-        
-        # Check for keypress
+        sleep 1
+
+        # ── CPU ──
+        local cpu_u2 cpu_n2 cpu_s2 cpu_i2 cpu_w2 cpu_q2 cpu_si2 cpu_st2
+        read -r _ cpu_u2 cpu_n2 cpu_s2 cpu_i2 cpu_w2 cpu_q2 cpu_si2 cpu_st2 _ < /proc/stat
+        local t1=$(( cpu_u1+cpu_n1+cpu_s1+cpu_i1+cpu_w1+cpu_q1+cpu_si1+cpu_st1 ))
+        local t2=$(( cpu_u2+cpu_n2+cpu_s2+cpu_i2+cpu_w2+cpu_q2+cpu_si2+cpu_st2 ))
+        local dt=$(( t2 - t1 ))
+        local di=$(( (cpu_i2+cpu_w2) - (cpu_i1+cpu_w1) ))
+        local cpu_pct=0
+        [[ $dt -gt 0 ]] && cpu_pct=$(( (dt - di) * 100 / dt ))
+        local iowait_pct=0
+        [[ $dt -gt 0 ]] && iowait_pct=$(( (cpu_w2 - cpu_w1) * 100 / dt ))
+        # Save for next iteration
+        cpu_u1=$cpu_u2; cpu_n1=$cpu_n2; cpu_s1=$cpu_s2; cpu_i1=$cpu_i2
+        cpu_w1=$cpu_w2; cpu_q1=$cpu_q2; cpu_si1=$cpu_si2; cpu_st1=$cpu_st2
+
+        local cores
+        cores=$(nproc 2>/dev/null || echo 1)
+        local load
+        load=$(awk '{printf "%s %s %s", $1, $2, $3}' /proc/loadavg 2>/dev/null)
+
+        # ── Memory ──
+        local mem_total mem_free mem_avail mem_buffers mem_cached swap_total swap_free
+        while IFS=': ' read -r key val _; do
+            case "$key" in
+                MemTotal)     mem_total=$val ;;
+                MemFree)      mem_free=$val ;;
+                MemAvailable) mem_avail=$val ;;
+                Buffers)      mem_buffers=$val ;;
+                Cached)       mem_cached=$val ;;
+                SwapTotal)    swap_total=$val ;;
+                SwapFree)     swap_free=$val ;;
+            esac
+        done < /proc/meminfo
+
+        local mem_used=$(( mem_total - mem_avail ))
+        local mem_pct=0
+        [[ $mem_total -gt 0 ]] && mem_pct=$(( mem_used * 100 / mem_total ))
+        local swap_used=$(( swap_total - swap_free ))
+        local swap_pct=0
+        [[ $swap_total -gt 0 ]] && swap_pct=$(( swap_used * 100 / swap_total ))
+
+        # ── Network ──
+        local rx2=0 tx2=0 rx_kbs=0 tx_kbs=0
+        if [[ -n "$nic" ]]; then
+            rx2=$(< "/sys/class/net/${nic}/statistics/rx_bytes")
+            tx2=$(< "/sys/class/net/${nic}/statistics/tx_bytes")
+            rx_kbs=$(( (rx2 - rx1) / 1024 ))
+            tx_kbs=$(( (tx2 - tx1) / 1024 ))
+            rx1=$rx2; tx1=$tx2
+        fi
+
+        # ── Disk IO ──
+        local dr2=0 dw2=0 dr_kbs=0 dw_kbs=0
+        if [[ -n "$dev" ]]; then
+            dr2=$(awk -v d="$dev" '$3==d{print $6}' /proc/diskstats 2>/dev/null)
+            dw2=$(awk -v d="$dev" '$3==d{print $10}' /proc/diskstats 2>/dev/null)
+            dr_kbs=$(( (dr2 - dr1) * 512 / 1024 ))
+            dw_kbs=$(( (dw2 - dw1) * 512 / 1024 ))
+            dr1=$dr2; dw1=$dw2
+        fi
+
+        local uptime_str
+        uptime_str="$(get_uptime)"
+
+        # ── Render ──
+        clear
+        local W=62  # box inner width
+        local B="${BOLD}${CYAN}"
+        local R="$RESET"
+
+        echo
+        printf '  %s┌──────────────────────────────────────────────────────────────┐%s\n' "$B" "$R"
+        printf '  %s│%s  %ss4dbox System Monitor%s                  Uptime: %-10s %s│%s\n' "$B" "$R" "$BOLD" "$R" "$uptime_str" "$B" "$R"
+        printf '  %s├──────────────────────────────────────────────────────────────┤%s\n' "$B" "$R"
+
+        # CPU
+        local cpu_bar
+        cpu_bar="$(_bar "$cpu_pct" 28)"
+        printf '  %s│%s  %sCPU%s   %s  %d cores  load %s %s│%s\n' \
+            "$B" "$R" "$BOLD" "$R" "$cpu_bar" "$cores" "$load" "$B" "$R"
+
+        # RAM
+        local ram_bar
+        ram_bar="$(_bar "$mem_pct" 28)"
+        printf '  %s│%s  %sRAM%s   %s  %s / %s   %s│%s\n' \
+            "$B" "$R" "$BOLD" "$R" "$ram_bar" "$(_fmt_size $mem_used)" "$(_fmt_size $mem_total)" "$B" "$R"
+
+        # Swap
+        if [[ $swap_total -gt 0 ]]; then
+            local swap_bar
+            swap_bar="$(_bar "$swap_pct" 28)"
+            printf '  %s│%s  %sSwap%s  %s  %s / %s   %s│%s\n' \
+                "$B" "$R" "$BOLD" "$R" "$swap_bar" "$(_fmt_size $swap_used)" "$(_fmt_size $swap_total)" "$B" "$R"
+        fi
+
+        # Buffers / Cached
+        printf '  %s│%s  %sBuf/Cache%s  Buffers: %-10s  Cached: %-14s  %s│%s\n' \
+            "$B" "$R" "$BOLD" "$R" "$(_fmt_size $mem_buffers)" "$(_fmt_size $mem_cached)" "$B" "$R"
+
+        # IO Wait
+        printf '  %s│%s  %sIO Wait%s    %d%%                                              %s│%s\n' \
+            "$B" "$R" "$BOLD" "$R" "$iowait_pct" "$B" "$R"
+
+        printf '  %s├──────────────────────────────────────────────────────────────┤%s\n' "$B" "$R"
+
+        # Network
+        printf '  %s│%s  %sNetwork%s (%s)                                          %s│%s\n' \
+            "$B" "$R" "$BOLD" "$R" "${nic:-none}" "$B" "$R"
+        printf '  %s│%s    ↓ Download: %-16s  ↑ Upload: %-14s  %s│%s\n' \
+            "$B" "$R" "$(_fmt_speed $rx_kbs)" "$(_fmt_speed $tx_kbs)" "$B" "$R"
+
+        printf '  %s├──────────────────────────────────────────────────────────────┤%s\n' "$B" "$R"
+
+        # Disk IO
+        printf '  %s│%s  %sDisk IO%s (%s)                                            %s│%s\n' \
+            "$B" "$R" "$BOLD" "$R" "${dev:-?}" "$B" "$R"
+        printf '  %s│%s    Read: %-18s  Write: %-16s    %s│%s\n' \
+            "$B" "$R" "$(_fmt_speed $dr_kbs)" "$(_fmt_speed $dw_kbs)" "$B" "$R"
+
+        printf '  %s├──────────────────────────────────────────────────────────────┤%s\n' "$B" "$R"
+
+        # Disk Usage
+        printf '  %s│%s  %sDisk Usage%s                                                  %s│%s\n' \
+            "$B" "$R" "$BOLD" "$R" "$B" "$R"
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            local d_src d_size d_used d_avail d_pct d_mount
+            read -r d_src d_size d_used d_avail d_pct d_mount <<< "$line"
+            local d_pct_num="${d_pct%%%*}"
+            local d_bar
+            d_bar="$(_bar "$d_pct_num" 15)"
+            printf '  %s│%s    %-10s %s  %5s / %-5s  %s│%s\n' \
+                "$B" "$R" "$d_mount" "$d_bar" "$d_used" "$d_size" "$B" "$R"
+        done < <(df -h --output=source,size,used,avail,pcent,target 2>/dev/null | grep -E '^/dev/')
+
+        printf '  %s└──────────────────────────────────────────────────────────────┘%s\n' "$B" "$R"
+        printf '\n  %sRefreshing every 1s — press q to exit%s\n' "$DIM" "$R"
+
+        # Non-blocking keypress check
         local key=""
-        read -rsn1 -t 2 key 2>/dev/null || true
+        read -rsn1 -t 0.1 key 2>/dev/null || true
         if [[ "$key" == "q" ]] || [[ "$key" == "Q" ]]; then
             running=0
         fi
     done
-    
-    # Restore terminal
-    stty echo icanon 2>/dev/null || true
+}
+
+# ─── Single snapshot (for non-interactive use) ───
+monitor_snapshot() {
+    monitor_live
+}
 }

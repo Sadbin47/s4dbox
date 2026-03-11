@@ -22,26 +22,21 @@ ssh_harden() {
             new_port="$(tui_input "New SSH port" "2222")"
         done
         
-        # Add new port without removing old one first
+        # Replace or add Port directive (remove all existing, add new)
+        sed -i '/^#\?Port /d' "$sshd_conf"
         echo "Port ${new_port}" >> "$sshd_conf"
-        systemctl restart sshd
         
-        msg_warn "IMPORTANT: Test the new SSH port before closing this session!"
-        msg_info "Try: ssh -p ${new_port} user@server"
-        echo
-        
-        if tui_confirm "Can you connect on port ${new_port}?"; then
-            # Remove old port lines (keep only the new one)
-            sed -i "/^Port /d" "$sshd_conf"
-            echo "Port ${new_port}" >> "$sshd_conf"
-            systemctl restart sshd
+        # Validate the config before restarting
+        if sshd -t 2>/dev/null; then
+            systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null
             config_set "S4D_SSH_PORT" "$new_port"
             msg_ok "SSH port changed to ${new_port}"
+            msg_warn "IMPORTANT: Connect with: ssh -p ${new_port} user@server"
         else
-            # Revert
-            sed -i "/^Port ${new_port}/d" "$sshd_conf"
-            systemctl restart sshd
-            msg_warn "Reverted SSH port change"
+            msg_error "Invalid sshd config — reverting port change"
+            sed -i "/^Port ${new_port}$/d" "$sshd_conf"
+            echo "Port 22" >> "$sshd_conf"
+            systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null || true
         fi
     fi
 
@@ -51,8 +46,12 @@ ssh_harden() {
             sed -i 's/^#\?PubkeyAuthentication .*/PubkeyAuthentication yes/' "$sshd_conf"
             sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' "$sshd_conf"
             sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin prohibit-password/' "$sshd_conf"
-            systemctl restart sshd
-            msg_ok "Root password login disabled (key-only)"
+            if sshd -t 2>/dev/null; then
+                systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null
+                msg_ok "Root password login disabled (key-only)"
+            else
+                msg_error "Config validation failed — skipping this change"
+            fi
         else
             msg_error "No SSH keys found in /root/.ssh/authorized_keys"
             msg_warn "Add your SSH key first, then re-run this option"
@@ -78,11 +77,22 @@ ssh_harden() {
     sed -i 's/^#\?ClientAliveInterval .*/ClientAliveInterval 300/' "$sshd_conf"
     sed -i 's/^#\?ClientAliveCountMax .*/ClientAliveCountMax 2/' "$sshd_conf"
     
-    systemctl restart sshd
-    spinner_stop 0
+    if sshd -t 2>/dev/null; then
+        systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null
+        spinner_stop 0
+        msg_ok "SSH security hardening complete"
+    else
+        spinner_stop 1
+        msg_error "SSH config validation failed — restoring backup"
+        local latest_bak
+        latest_bak="$(ls -t ${sshd_conf}.bak.* 2>/dev/null | head -1)"
+        if [[ -n "$latest_bak" ]]; then
+            cp "$latest_bak" "$sshd_conf"
+            systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null || true
+        fi
+    fi
     
     log_info "SSH hardening applied"
-    msg_ok "SSH security hardening complete"
     return 0
 }
 
