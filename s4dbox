@@ -20,8 +20,15 @@ set -euo pipefail
 
 S4D_VERSION="1.0.0"
 
-# ─── Resolve script directory ───
-S4D_BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ─── Resolve script directory (follow symlinks) ───
+_s4d_source="${BASH_SOURCE[0]}"
+while [[ -L "$_s4d_source" ]]; do
+    _s4d_dir="$(cd "$(dirname "$_s4d_source")" && pwd)"
+    _s4d_source="$(readlink "$_s4d_source")"
+    [[ "$_s4d_source" != /* ]] && _s4d_source="${_s4d_dir}/${_s4d_source}"
+done
+S4D_BASE_DIR="$(cd "$(dirname "$_s4d_source")" && pwd)"
+unset _s4d_source _s4d_dir
 export S4D_BASE_DIR
 
 # ─── Root Check ───
