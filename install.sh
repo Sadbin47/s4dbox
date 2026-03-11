@@ -148,18 +148,23 @@ download_s4dbox() {
     
     info "Downloading s4dbox (branch: ${S4D_BRANCH})..."
     
-    if command -v git &>/dev/null; then
-        git clone --depth 1 --branch "${S4D_BRANCH}" "${S4D_REPO}.git" "${tmp_dir}/s4dbox" 2>/dev/null && {
-            mv "${tmp_dir}/s4dbox" "${S4D_INSTALL_DIR}"
-            ok "Downloaded via git"
-        } || {
-            # Fallback: try archive
-            warn "Git clone failed, trying archive download..."
-            download_archive "${tmp_dir}"
-        }
-    else
-        download_archive "${tmp_dir}"
-    fi
+    # Prefer archive download — no auth needed, works for public repos
+    download_archive "${tmp_dir}" && {
+        true
+    } || {
+        # Fallback: try git clone with prompts disabled
+        if command -v git &>/dev/null; then
+            warn "Archive download failed, trying git clone..."
+            GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "${S4D_BRANCH}" "${S4D_REPO}.git" "${tmp_dir}/s4dbox" 2>/dev/null && {
+                mv "${tmp_dir}/s4dbox" "${S4D_INSTALL_DIR}"
+                ok "Downloaded via git"
+            } || {
+                die "Failed to download s4dbox. Check your internet connection and that the repo is public."
+            }
+        else
+            die "Download failed and git is not available."
+        fi
+    }
     
     rm -rf "${tmp_dir}"
 }
