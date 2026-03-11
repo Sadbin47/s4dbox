@@ -30,10 +30,10 @@ A modular seedbox management tool built entirely in Bash. No heavy runtimes, no 
 
 ```bash
 # One-click install
-curl -fsSL https://raw.githubusercontent.com/s4d/s4dbox/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Sadbin47/s4dbox/main/install.sh | sudo bash
 
 # Or clone and install
-git clone https://github.com/s4d/s4dbox.git
+git clone https://github.com/Sadbin47/s4dbox.git
 cd s4dbox
 sudo ./install.sh
 ```

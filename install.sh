@@ -4,9 +4,9 @@
 #═══════════════════════════════════════════════════════════════════════════════
 #
 #  Usage:
-#    curl -fsSL https://raw.githubusercontent.com/s4d/s4dbox/main/install.sh | sudo bash
+#    curl -fsSL https://raw.githubusercontent.com/Sadbin47/s4dbox/main/install.sh | sudo bash
 #    or:
-#    wget -qO- https://raw.githubusercontent.com/s4d/s4dbox/main/install.sh | sudo bash
+#    wget -qO- https://raw.githubusercontent.com/Sadbin47/s4dbox/main/install.sh | sudo bash
 #
 #  Options (env vars):
 #    S4D_BRANCH=main           Git branch to install from
@@ -22,7 +22,7 @@ S4D_BRANCH="${S4D_BRANCH:-main}"
 S4D_INSTALL_DIR="${S4D_INSTALL_DIR:-/opt/s4dbox}"
 S4D_BIN="/usr/local/bin/s4dbox"
 S4D_SKIP_SETUP="${S4D_SKIP_SETUP:-0}"
-S4D_REPO="https://github.com/s4d/s4dbox"
+S4D_REPO="https://github.com/Sadbin47/s4dbox"
 
 #── Colors ──
 RED='\033[0;31m'
