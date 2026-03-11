@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+# s4dbox - Application Manager
+# Handles install/remove/update/status for all apps
+
+S4D_APPS_DIR="${S4D_BASE_DIR}/apps"
+
+# Available applications registry
+declare -A S4D_APP_DESC=(
+    [qbittorrent]="qBittorrent - Torrent Client"
+    [jellyfin]="Jellyfin - Media Server"
+    [plex]="Plex - Media Server"
+    [filebrowser]="FileBrowser - Web File Manager"
+    [rtorrent]="rTorrent - Torrent Client"
+    [rutorrent]="ruTorrent - rTorrent Web UI"
+    [tailscale]="Tailscale - VPN / Remote Access"
+)
+
+# List available apps
+app_list_available() {
+    for app in "${!S4D_APP_DESC[@]}"; do
+        local status="not installed"
+        app_is_installed "$app" && status="${GREEN}installed${RESET}"
+        printf "  %-15s %s  [%b]\n" "$app" "${S4D_APP_DESC[$app]}" "$status"
+    done | sort
+}
+
+# Install an app
+app_install() {
+    local app="$1"
+    shift
+    local install_script="${S4D_APPS_DIR}/install/${app}.sh"
+    
+    if [[ ! -f "$install_script" ]]; then
+        msg_error "No installer found for: $app"
+        return 1
+    fi
+
+    if app_is_installed "$app"; then
+        msg_warn "$app is already installed"
+        if ! tui_confirm "Reinstall $app?"; then
+            return 0
+        fi
+    fi
+
+    msg_step "Installing ${S4D_APP_DESC[$app]:-$app}..."
+    log_info "Starting installation: $app"
+    
+    # Source and run the installer
+    source "$install_script"
+    if "install_${app}" "$@"; then
+        app_mark_installed "$app"
+        msg_ok "${app} installed successfully"
+        log_info "Installation complete: $app"
+        
+        # Install nginx config if nginx is enabled
+        if [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]]; then
+            local nginx_script="${S4D_APPS_DIR}/nginx/${app}.sh"
+            if [[ -f "$nginx_script" ]]; then
+                source "$nginx_script"
+                "nginx_${app}" 2>/dev/null || true
+            fi
+        fi
+        return 0
+    else
+        msg_fail "${app} installation failed"
+        log_error "Installation failed: $app"
+        return 1
+    fi
+}
+
+# Remove an app
+app_remove() {
+    local app="$1"
+    local remove_script="${S4D_APPS_DIR}/remove/${app}.sh"
+    
+    if ! app_is_installed "$app"; then
+        msg_warn "$app is not installed"
+        return 0
+    fi
+    
+    if [[ ! -f "$remove_script" ]]; then
+        msg_error "No removal script found for: $app"
+        return 1
+    fi
+
+    if ! tui_confirm "Remove ${app}? This cannot be undone."; then
+        return 0
+    fi
+
+    msg_step "Removing ${app}..."
+    log_info "Starting removal: $app"
+    
+    source "$remove_script"
+    if "remove_${app}"; then
+        app_mark_removed "$app"
+        
+        # Remove nginx config
+        rm -f "/etc/nginx/sites-enabled/${app}.conf" 2>/dev/null
+        rm -f "/etc/nginx/sites-available/${app}.conf" 2>/dev/null
+        systemctl reload nginx 2>/dev/null || true
+        
+        msg_ok "${app} removed successfully"
+        log_info "Removal complete: $app"
+        return 0
+    else
+        msg_fail "${app} removal failed"
+        log_error "Removal failed: $app"
+        return 1
+    fi
+}
+
+# Get app service status
+app_status() {
+    local app="$1"
+    if ! app_is_installed "$app"; then
+        echo "not installed"
+        return
+    fi
+    
+    # Try systemd service check
+    local service_name
+    case "$app" in
+        qbittorrent) service_name="qbittorrent-nox@*" ;;
+        jellyfin)    service_name="jellyfin" ;;
+        plex)        service_name="plexmediaserver" ;;
+        filebrowser) service_name="filebrowser" ;;
+        rtorrent)    service_name="rtorrent@*" ;;
+        tailscale)   service_name="tailscaled" ;;
+        *)           service_name="$app" ;;
+    esac
+
+    if systemctl is-active "$service_name" &>/dev/null; then
+        echo "running"
+    else
+        echo "stopped"
+    fi
+}
+
+# Restart app service
+app_restart() {
+    local app="$1"
+    local user
+    user="$(get_seedbox_user)"
+    
+    case "$app" in
+        qbittorrent) systemctl restart "qbittorrent-nox@${user}" ;;
+        jellyfin)    systemctl restart jellyfin ;;
+        plex)        systemctl restart plexmediaserver ;;
+        filebrowser) systemctl restart filebrowser ;;
+        rtorrent)    systemctl restart "rtorrent@${user}" ;;
+        tailscale)   systemctl restart tailscaled ;;
+        *)           systemctl restart "$app" 2>/dev/null ;;
+    esac
+}
+
+# ─── Interactive App Menu ───
+app_menu_install() {
+    local apps=("qbittorrent" "jellyfin" "plex" "filebrowser" "rtorrent" "rutorrent" "tailscale" "← Back")
+    local labels=()
+    
+    for app in "${apps[@]}"; do
+        if [[ "$app" == "← Back" ]]; then
+            labels+=("$app")
+        else
+            local status=""
+            app_is_installed "$app" && status=" [installed]"
+            labels+=("${S4D_APP_DESC[$app]:-$app}${status}")
+        fi
+    done
+
+    tui_draw_menu "Install Applications" "${labels[@]}"
+    local choice=$?
+    
+    [[ $choice -eq 255 ]] && return
+    [[ $choice -ge $(( ${#apps[@]} - 1 )) ]] && return
+    
+    local selected_app="${apps[$choice]}"
+    app_install "$selected_app"
+    tui_pause
+}
+
+app_menu_remove() {
+    local installed
+    installed=$(app_list_installed)
+    
+    if [[ -z "$installed" ]]; then
+        msg_info "No applications installed"
+        tui_pause
+        return
+    fi
+
+    local apps=()
+    while IFS= read -r app; do
+        apps+=("${S4D_APP_DESC[$app]:-$app}")
+    done <<< "$installed"
+    apps+=("← Back")
+    
+    tui_draw_menu "Remove Applications" "${apps[@]}"
+    local choice=$?
+    
+    [[ $choice -eq 255 ]] && return
+    [[ $choice -ge $(( ${#apps[@]} - 1 )) ]] && return
+    
+    local app_names=()
+    while IFS= read -r app; do
+        app_names+=("$app")
+    done <<< "$installed"
+    
+    app_remove "${app_names[$choice]}"
+    tui_pause
+}
+
+app_menu_status() {
+    clear
+    msg_header "Application Status"
+    
+    local has_apps=0
+    for app in "${!S4D_APP_DESC[@]}"; do
+        if app_is_installed "$app"; then
+            has_apps=1
+            local status
+            status="$(app_status "$app")"
+            local color="$RED"
+            [[ "$status" == "running" ]] && color="$GREEN"
+            printf "  %-20s ${color}%-10s${RESET}\n" "${S4D_APP_DESC[$app]}" "$status"
+        fi
+    done
+    
+    [[ $has_apps -eq 0 ]] && msg_info "No applications installed"
+    
+    echo
+    tui_pause
+}
+
+app_menu_manage() {
+    while true; do
+        local options=(
+            "Install Application"
+            "Remove Application"
+            "Application Status"
+            "Restart Application"
+            "← Back"
+        )
+        
+        tui_draw_menu "Application Manager" "${options[@]}"
+        local choice=$?
+        
+        case $choice in
+            0) app_menu_install ;;
+            1) app_menu_remove ;;
+            2) app_menu_status ;;
+            3)
+                local installed
+                installed=$(app_list_installed)
+                if [[ -n "$installed" ]]; then
+                    local apps=()
+                    while IFS= read -r app; do
+                        apps+=("${S4D_APP_DESC[$app]:-$app}")
+                    done <<< "$installed"
+                    apps+=("← Back")
+                    
+                    tui_draw_menu "Restart Application" "${apps[@]}"
+                    local rchoice=$?
+                    if [[ $rchoice -ne 255 ]] && [[ $rchoice -lt $(( ${#apps[@]} - 1 )) ]]; then
+                        local app_names=()
+                        while IFS= read -r app; do
+                            app_names+=("$app")
+                        done <<< "$installed"
+                        app_restart "${app_names[$rchoice]}"
+                        msg_ok "Service restarted"
+                        tui_pause
+                    fi
+                fi
+                ;;
+            *) return ;;
+        esac
+    done
+}

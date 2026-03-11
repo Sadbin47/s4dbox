@@ -1,0 +1,335 @@
+#!/usr/bin/env bash
+#═══════════════════════════════════════════════════════════════════════════════
+#  s4dbox — Lightweight Universal Seedbox Manager
+#═══════════════════════════════════════════════════════════════════════════════
+#
+#  A modular, platform-independent seedbox management tool.
+#  Supports: Debian/Ubuntu, Arch, RHEL/Fedora/Rocky/Alma
+#  Architectures: x86_64, ARM64
+#
+#  Usage:
+#    sudo ./s4dbox              # Launch TUI
+#    sudo ./s4dbox install      # Run guided first-time setup
+#    sudo ./s4dbox monitor      # Jump to system monitor
+#    sudo ./s4dbox tune         # Apply system tuning
+#    sudo ./s4dbox help         # Show help
+#
+#═══════════════════════════════════════════════════════════════════════════════
+
+set -euo pipefail
+
+S4D_VERSION="1.0.0"
+
+# ─── Resolve script directory ───
+S4D_BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export S4D_BASE_DIR
+
+# ─── Root Check ───
+if [[ $EUID -ne 0 ]]; then
+    echo "s4dbox requires root privileges. Run with sudo."
+    exit 1
+fi
+
+# ─── Source Libraries ───
+source "${S4D_BASE_DIR}/lib/colors.sh"
+source "${S4D_BASE_DIR}/lib/logging.sh"
+source "${S4D_BASE_DIR}/lib/system.sh"
+source "${S4D_BASE_DIR}/lib/config.sh"
+source "${S4D_BASE_DIR}/lib/users.sh"
+
+# ─── Source Modules ───
+source "${S4D_BASE_DIR}/modules/tui.sh"
+source "${S4D_BASE_DIR}/modules/monitor.sh"
+source "${S4D_BASE_DIR}/modules/app_manager.sh"
+source "${S4D_BASE_DIR}/modules/tune.sh"
+source "${S4D_BASE_DIR}/modules/nginx.sh"
+source "${S4D_BASE_DIR}/modules/security.sh"
+source "${S4D_BASE_DIR}/modules/storage.sh"
+source "${S4D_BASE_DIR}/modules/network.sh"
+
+# ─── Initialize ───
+init() {
+    log_init
+    config_init
+    detect_system
+    config_load
+    log_info "s4dbox ${S4D_VERSION} started on ${S4D_OS_PRETTY} (${S4D_ARCH})"
+}
+
+# ─── Banner ───
+show_banner() {
+    printf "${BOLD}${CYAN}"
+    cat <<'BANNER'
+
+    ███████╗██╗  ██╗██████╗ ██████╗  ██████╗ ██╗  ██╗
+    ██╔════╝██║  ██║██╔══██╗██╔══██╗██╔═══██╗╚██╗██╔╝
+    ███████╗███████║██║  ██║██████╔╝██║   ██║ ╚███╔╝ 
+    ╚════██║╚════██║██║  ██║██╔══██╗██║   ██║ ██╔██╗ 
+    ███████║     ██║██████╔╝██████╔╝╚██████╔╝██╔╝ ██╗
+    ╚══════╝     ╚═╝╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝
+                                                
+BANNER
+    printf "${RESET}"
+    printf "    ${DIM}Lightweight Universal Seedbox Manager v${S4D_VERSION}${RESET}\n"
+    printf "    ${DIM}${S4D_OS_PRETTY} | ${S4D_ARCH} | ${S4D_MEM_TOTAL_MB}MB RAM${RESET}\n\n"
+}
+
+# ─── First-Time Setup ───
+first_time_setup() {
+    clear
+    show_banner
+    msg_header "First-Time Setup"
+    
+    msg_info "Detected: ${S4D_OS_PRETTY} (${S4D_DISTRO_FAMILY}) on ${S4D_ARCH}"
+    echo
+    
+    # Update packages
+    if tui_confirm "Update system packages?"; then
+        spinner_start "Updating packages"
+        pkg_update 2>/dev/null
+        spinner_stop 0
+    fi
+    
+    # Install dependencies
+    spinner_start "Installing core dependencies"
+    install_core_deps 2>/dev/null
+    spinner_stop 0
+    
+    # User setup
+    local username
+    if [[ -z "$(get_seedbox_user)" ]]; then
+        username="$(prompt_user_setup)"
+    else
+        username="$(get_seedbox_user)"
+        msg_info "Existing user found: ${username}"
+    fi
+    
+    echo
+    
+    # App selection
+    msg_step "Select applications to install"
+    echo
+    local selected_apps
+    selected_apps=$(tui_checkbox_menu "Select Applications" \
+        "qBittorrent" \
+        "Jellyfin" \
+        "Plex" \
+        "FileBrowser" \
+        "rTorrent" \
+        "ruTorrent" \
+        "Tailscale")
+    
+    if [[ $? -eq 0 ]] && [[ -n "$selected_apps" ]]; then
+        while IFS= read -r app_display; do
+            local app_id
+            case "$app_display" in
+                "qBittorrent") app_id="qbittorrent" ;;
+                "Jellyfin")    app_id="jellyfin" ;;
+                "Plex")        app_id="plex" ;;
+                "FileBrowser") app_id="filebrowser" ;;
+                "rTorrent")    app_id="rtorrent" ;;
+                "ruTorrent")   app_id="rutorrent" ;;
+                "Tailscale")   app_id="tailscale" ;;
+                *)             continue ;;
+            esac
+            echo
+            app_install "$app_id" || true
+        done <<< "$selected_apps"
+    fi
+    
+    echo
+    
+    # Tuning
+    if tui_confirm "Apply system tuning for optimal seedbox performance?"; then
+        tune_apply_all
+    fi
+    
+    # Nginx
+    if tui_confirm "Setup Nginx reverse proxy?"; then
+        nginx_install
+        nginx_create_main_server
+        for app in qbittorrent jellyfin plex filebrowser; do
+            app_is_installed "$app" && "nginx_${app}" 2>/dev/null || true
+        done
+    fi
+    
+    # Security
+    if tui_confirm "Apply SSH security hardening and firewall?"; then
+        security_fail2ban || true
+        firewall_setup || true
+    fi
+    
+    echo
+    msg_header "Setup Complete"
+    print_system_info
+    
+    msg_info "Installed applications:"
+    app_list_installed | while IFS= read -r app; do
+        local status
+        status="$(app_status "$app")"
+        printf "  %-15s [%s]\n" "$app" "$status"
+    done
+    
+    echo
+    msg_ok "s4dbox setup complete! Run 's4dbox' to open the management TUI"
+    tui_pause
+}
+
+# ─── Settings Menu ───
+settings_menu() {
+    while true; do
+        local options=(
+            "System Information"
+            "User Management"
+            "View Configuration"
+            "View Logs"
+            "About s4dbox"
+            "← Back"
+        )
+        
+        tui_draw_menu "Settings" "${options[@]}"
+        local choice=$?
+        
+        case $choice in
+            0) clear; print_system_info; tui_pause ;;
+            1) prompt_user_setup; tui_pause ;;
+            2)
+                clear
+                msg_header "Configuration"
+                cat "$S4D_CONF_FILE" 2>/dev/null
+                tui_pause
+                ;;
+            3)
+                clear
+                msg_header "Recent Logs"
+                tail -50 "$S4D_LOG_FILE" 2>/dev/null || msg_info "No logs yet"
+                tui_pause
+                ;;
+            4)
+                clear
+                show_banner
+                echo "  s4dbox is a lightweight, universal seedbox management tool."
+                echo "  Built with pure Bash for minimal resource usage."
+                echo
+                echo "  Supports: Debian, Ubuntu, Arch, Fedora, RHEL, Rocky, Alma"
+                echo "  Architectures: x86_64, ARM64"
+                echo
+                echo "  Features:"
+                echo "    - Real-time system monitoring"
+                echo "    - App installation & management"
+                echo "    - System tuning for optimal torrent performance"
+                echo "    - Nginx reverse proxy"
+                echo "    - SSH hardening & firewall"
+                echo "    - Storage management"
+                echo "    - Network & VPN tools"
+                echo
+                tui_pause
+                ;;
+            *) return ;;
+        esac
+    done
+}
+
+# ─── Main Menu Loop ───
+main_menu() {
+    while true; do
+        clear
+        show_banner
+        
+        local options=(
+            "System Monitor"
+            "Application Manager"
+            "System Tuning"
+            "Nginx Management"
+            "Security & Firewall"
+            "Storage Manager"
+            "Network Manager"
+            "Settings"
+            "Exit"
+        )
+        
+        tui_draw_menu "s4dbox Main Menu" "${options[@]}"
+        local choice=$?
+        
+        case $choice in
+            0) monitor_live ;;
+            1) app_menu_manage ;;
+            2) tune_menu ;;
+            3) nginx_menu ;;
+            4) security_menu ;;
+            5) storage_menu ;;
+            6) network_menu ;;
+            7) settings_menu ;;
+            8|255)
+                clear
+                msg_info "s4dbox exiting. Goodbye!"
+                log_info "s4dbox session ended"
+                exit 0
+                ;;
+        esac
+    done
+}
+
+# ─── Help ───
+show_help() {
+    echo "s4dbox — Lightweight Universal Seedbox Manager v${S4D_VERSION}"
+    echo
+    echo "Usage: sudo s4dbox [command]"
+    echo
+    echo "Commands:"
+    echo "  (none)      Launch interactive TUI"
+    echo "  install     Run first-time guided setup"
+    echo "  monitor     Open system monitor"
+    echo "  tune        Apply system tuning"
+    echo "  security    Run security hardening"
+    echo "  status      Show installed app status"
+    echo "  help        Show this help"
+    echo
+}
+
+# ─── Entry Point ───
+main() {
+    init
+    
+    case "${1:-}" in
+        install|setup)
+            first_time_setup
+            ;;
+        monitor)
+            monitor_live
+            ;;
+        tune)
+            tune_apply_all
+            ;;
+        security)
+            ssh_harden
+            security_fail2ban
+            firewall_setup
+            ;;
+        status)
+            print_system_info
+            echo "Installed Applications:"
+            app_list_installed | while IFS= read -r app; do
+                printf "  %-15s [%s]\n" "$app" "$(app_status "$app")"
+            done
+            ;;
+        help|-h|--help)
+            show_help
+            ;;
+        "")
+            # Check if first run
+            if [[ ! -f "${S4D_CONF_DIR}/.initialized" ]]; then
+                first_time_setup
+                touch "${S4D_CONF_DIR}/.initialized"
+            fi
+            main_menu
+            ;;
+        *)
+            echo "Unknown command: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
