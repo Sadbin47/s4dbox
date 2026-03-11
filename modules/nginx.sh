@@ -26,10 +26,25 @@ nginx_install() {
     fi
 
     # Remove default server block from nginx.conf on Arch (it conflicts with our sites)
-    # Back up first, then comment out any server{} inside http{} in main config
+    # Must use awk with brace-depth tracking — sed can't handle nested {} blocks
     if [[ "$S4D_DISTRO_FAMILY" == "arch" ]]; then
-        # Remove the default server block shipped in nginx.conf
-        sed -i '/^\s*server\s*{/,/^\s*}/{ s/^/#s4d#/; }' /etc/nginx/nginx.conf 2>/dev/null
+        if grep -qP '^\s*server\s*\{' /etc/nginx/nginx.conf 2>/dev/null; then
+            awk '
+                /^\s*server\s*\{/ && !in_server { in_server=1; depth=0 }
+                in_server {
+                    for(i=1;i<=length($0);i++){
+                        c=substr($0,i,1)
+                        if(c=="{") depth++
+                        if(c=="}") depth--
+                    }
+                    print "#s4d#" $0
+                    if(depth<=0) in_server=0
+                    next
+                }
+                { print }
+            ' /etc/nginx/nginx.conf > /etc/nginx/nginx.conf.tmp \
+                && mv /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf
+        fi
     fi
 
     systemctl enable nginx 2>/dev/null
