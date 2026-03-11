@@ -17,6 +17,34 @@ nginx_install() {
     mkdir -p /etc/nginx/sites-available
     mkdir -p /etc/nginx/sites-enabled
 
+    # ── Ensure a clean, working nginx.conf ──
+    # If a previous s4dbox run corrupted the config, restore from package default
+    if ! nginx -t &>/dev/null; then
+        msg_warn "nginx.conf is broken — restoring default config"
+        # Arch: pacman ships .pacnew or we can extract from package cache
+        if [[ "$S4D_DISTRO_FAMILY" == "arch" ]]; then
+            if [[ -f /etc/nginx/nginx.conf.pacnew ]]; then
+                cp /etc/nginx/nginx.conf.pacnew /etc/nginx/nginx.conf
+            else
+                # Re-extract from package
+                pacman -S --noconfirm nginx &>/dev/null
+                # pacman may create .pacnew instead of overwriting; check both
+                if [[ -f /etc/nginx/nginx.conf.pacnew ]]; then
+                    mv /etc/nginx/nginx.conf.pacnew /etc/nginx/nginx.conf
+                fi
+            fi
+        elif [[ "$S4D_DISTRO_FAMILY" == "debian" ]]; then
+            if [[ -f /etc/nginx/nginx.conf.dpkg-dist ]]; then
+                cp /etc/nginx/nginx.conf.dpkg-dist /etc/nginx/nginx.conf
+            fi
+        fi
+    fi
+
+    # ── Remove any prior s4dbox comments to start fresh ──
+    if grep -q '#s4d#' /etc/nginx/nginx.conf 2>/dev/null; then
+        sed -i 's/^#s4d#//' /etc/nginx/nginx.conf 2>/dev/null
+    fi
+
     # Include sites-enabled in nginx.conf inside http block (if not already)
     if ! grep -q 'include.*/etc/nginx/sites-enabled' /etc/nginx/nginx.conf 2>/dev/null; then
         # Insert inside http{} block — find 'http {' and add after it

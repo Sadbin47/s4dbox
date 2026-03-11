@@ -232,8 +232,8 @@ first_time_setup() {
                     url="(SCGI - no web UI)"
                     ;;
                 rutorrent)
-                    port="$(config_get S4D_RUTORRENT_PORT 443)"
-                    url="http://${ip}/rutorrent"
+                    port="$(config_get S4D_RUTORRENT_PORT 8081)"
+                    url="http://${ip}:${port}"
                     ;;
                 tailscale)
                     local ts_ip

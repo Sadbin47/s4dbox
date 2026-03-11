@@ -153,12 +153,20 @@ EOF
     ln -sf /etc/nginx/sites-available/rutorrent.conf /etc/nginx/sites-enabled/
 
     # Test and restart nginx
-    if nginx -t 2>/dev/null; then
+    if nginx -t &>/dev/null; then
         systemctl restart nginx 2>/dev/null
         msg_ok "Nginx started with ruTorrent config"
     else
-        msg_warn "Nginx config test failed — checking details:"
-        nginx -t 2>&1 | while IFS= read -r line; do msg_warn "  $line"; done
+        # Common issue: nginx.conf corrupted — try running nginx_install to repair
+        msg_warn "Nginx config test failed — attempting repair..."
+        nginx_install
+        if nginx -t &>/dev/null; then
+            systemctl restart nginx 2>/dev/null
+            msg_ok "Nginx repaired and started with ruTorrent config"
+        else
+            msg_warn "Nginx config still broken — details:"
+            nginx -t 2>&1 | while IFS= read -r line; do msg_warn "  $line"; done
+        fi
     fi
 
     config_set "S4D_RUTORRENT_PORT" "$port"
