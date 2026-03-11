@@ -7,7 +7,7 @@ network_status() {
     msg_header "Network Status"
     
     local ip_addr
-    ip_addr="$(hostname -I | awk '{print $1}')"
+    ip_addr="$(get_local_ip)"
     local gateway
     gateway="$(ip route | awk '/default/{print $3}')"
     local dns

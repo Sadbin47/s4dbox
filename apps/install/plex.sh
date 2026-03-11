@@ -22,17 +22,20 @@ install_plex() {
             ;;
         arch)
             spinner_start "Installing Plex"
-            # Plex on Arch typically from AUR, use pacman if available or manual install
+            # Try AUR helpers in order: yay, paru, then manual
             if command -v yay &>/dev/null; then
-                sudo -u "$username" yay -S --noconfirm plex-media-server
+                sudo -u "$username" yay -S --noconfirm plex-media-server 2>/dev/null
+            elif command -v paru &>/dev/null; then
+                sudo -u "$username" paru -S --noconfirm plex-media-server 2>/dev/null
             else
-                # Manual download
-                local plex_url
-                plex_url="$(wget -qO- 'https://plex.tv/api/downloads/5.json' | jq -r '.computer.Linux.releases[] | select(.build=="linux-x86_64") | .url' | head -1)"
-                if [[ -n "$plex_url" ]]; then
-                    wget -q "$plex_url" -O /tmp/plex.rpm
-                    # Convert  
-                    msg_warn "Manual Plex install on Arch may require AUR helper"
+                # Install via Flatpak as fallback
+                if command -v flatpak &>/dev/null || pkg_install flatpak 2>/dev/null; then
+                    flatpak install -y --noninteractive flathub tv.plex.PlexMediaServer 2>/dev/null
+                else
+                    spinner_stop 1
+                    msg_error "Plex requires an AUR helper (yay/paru) or flatpak on Arch"
+                    msg_info "Install with: yay -S plex-media-server"
+                    return 1
                 fi
             fi
             spinner_stop $?
@@ -63,13 +66,26 @@ EOF
     mkdir -p "/home/${username}/media/"{movies,shows,music}
     chown -R "${username}:${username}" "/home/${username}/media"
 
-    systemctl enable plexmediaserver 2>/dev/null
-    systemctl start plexmediaserver
+    # Service name varies by distro
+    local plex_svc=""
+    for svc in plexmediaserver plexmediaserver.service plex-media-server; do
+        if systemctl list-unit-files "$svc" &>/dev/null 2>&1; then
+            plex_svc="$svc"
+            break
+        fi
+    done
+    
+    if [[ -n "$plex_svc" ]]; then
+        systemctl enable "$plex_svc" 2>/dev/null
+        systemctl start "$plex_svc" 2>/dev/null
+    else
+        msg_warn "Plex service not found. You may need to start it manually."
+    fi
     
     config_set "S4D_PLEX_PORT" "32400"
     
     local ip
-    ip="$(hostname -I | awk '{print $1}')"
+    ip="$(get_local_ip)"
     msg_ok "Plex Media Server installed"
     msg_info "WebUI: http://${ip}:32400/web"
     

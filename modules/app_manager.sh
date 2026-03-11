@@ -122,7 +122,16 @@ app_status() {
     case "$app" in
         qbittorrent) service_name="qbittorrent-nox@*" ;;
         jellyfin)    service_name="jellyfin" ;;
-        plex)        service_name="plexmediaserver" ;;
+        plex)        
+            # Service name varies by distro/install method
+            for _svc in plexmediaserver plex-media-server; do
+                if systemctl is-active "$_svc" &>/dev/null; then
+                    service_name="$_svc"
+                    break
+                fi
+            done
+            service_name="${service_name:-plexmediaserver}"
+            ;;
         filebrowser) service_name="filebrowser" ;;
         rtorrent)    service_name="rtorrent@*" ;;
         tailscale)   service_name="tailscaled" ;;

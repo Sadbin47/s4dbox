@@ -329,7 +329,7 @@ QBCONF
     config_set "S4D_QB_LIBTORRENT" "$lib_ver"
     
     msg_ok "qBittorrent ${qb_ver} installed"
-    msg_info "WebUI: http://$(hostname -I | awk '{print $1}'):${qb_port}"
+    msg_info "WebUI: http://$(get_local_ip):${qb_port}"
     msg_info "Username: ${username}"
     
     return 0

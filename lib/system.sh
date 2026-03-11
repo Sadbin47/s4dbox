@@ -219,6 +219,22 @@ install_core_deps() {
     done
 }
 
+# ─── Get Local IP (works without hostname command) ───
+get_local_ip() {
+    # Try ip command first (most reliable)
+    if command -v ip &>/dev/null; then
+        ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1
+        return
+    fi
+    # Fallback to hostname -I
+    if command -v hostname &>/dev/null; then
+        hostname -I 2>/dev/null | awk '{print $1}'
+        return
+    fi
+    # Last resort
+    echo "127.0.0.1"
+}
+
 # ─── Print System Summary ───
 print_system_info() {
     msg_header "System Information"

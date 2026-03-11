@@ -77,7 +77,7 @@ EOF
     config_set "S4D_JELLYFIN_PORT" "$port"
     
     local ip
-    ip="$(hostname -I | awk '{print $1}')"
+    ip="$(get_local_ip)"
     msg_ok "Jellyfin installed"
     msg_info "WebUI: http://${ip}:${port}"
     

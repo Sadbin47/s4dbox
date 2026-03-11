@@ -146,7 +146,7 @@ EOF
     config_set "S4D_NGINX_ENABLED" "1"
     
     local ip
-    ip="$(hostname -I | awk '{print $1}')"
+    ip="$(get_local_ip)"
     msg_ok "ruTorrent installed"
     msg_info "WebUI: http://${ip}:${port}"
     msg_info "Username: ${username}"

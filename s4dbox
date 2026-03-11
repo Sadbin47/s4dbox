@@ -167,18 +167,146 @@ first_time_setup() {
     fi
     
     echo
-    msg_header "Setup Complete"
-    print_system_info
     
-    msg_info "Installed applications:"
-    app_list_installed | while IFS= read -r app; do
-        local status
-        status="$(app_status "$app")"
-        printf "  %-15s [%s]\n" "$app" "$status"
-    done
+    # ─── Final Summary ───
+    clear
+    show_banner
+    
+    local ip
+    ip="$(get_local_ip)"
+    local username
+    username="$(get_seedbox_user)"
+    
+    msg_header "Installation Summary"
+    echo
+    printf "  ${BOLD}${CYAN}┌────────────────────────────────────────────────────────┐${RESET}\n"
+    printf "  ${BOLD}${CYAN}│${RESET}  ${BOLD}Server Information${RESET}                                   ${BOLD}${CYAN}│${RESET}\n"
+    printf "  ${BOLD}${CYAN}├────────────────────────────────────────────────────────┤${RESET}\n"
+    printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "OS:" "$S4D_OS_PRETTY"
+    printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "Architecture:" "$S4D_ARCH"
+    printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "IP Address:" "$ip"
+    printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "Seedbox User:" "$username"
+    printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "RAM:" "${S4D_MEM_TOTAL_MB}MB"
+    printf "  ${BOLD}${CYAN}└────────────────────────────────────────────────────────┘${RESET}\n"
+    echo
+    
+    # Installed Apps Table
+    local installed_apps
+    installed_apps="$(app_list_installed)"
+    
+    if [[ -n "$installed_apps" ]]; then
+        printf "  ${BOLD}${GREEN}┌────────────────────────────────────────────────────────┐${RESET}\n"
+        printf "  ${BOLD}${GREEN}│${RESET}  ${BOLD}Installed Applications${RESET}                               ${BOLD}${GREEN}│${RESET}\n"
+        printf "  ${BOLD}${GREEN}├──────────────────┬────────────┬────────────────────────┤${RESET}\n"
+        printf "  ${BOLD}${GREEN}│${RESET} %-16s ${BOLD}${GREEN}│${RESET} %-10s ${BOLD}${GREEN}│${RESET} %-22s ${BOLD}${GREEN}│${RESET}\n" "Application" "Status" "Access URL"
+        printf "  ${BOLD}${GREEN}├──────────────────┼────────────┼────────────────────────┤${RESET}\n"
+        
+        while IFS= read -r app; do
+            local status port url status_color
+            status="$(app_status "$app")"
+            
+            if [[ "$status" == "running" ]]; then
+                status_color="${GREEN}"
+            else
+                status_color="${RED}"
+            fi
+            
+            case "$app" in
+                qbittorrent)
+                    port="$(config_get S4D_QB_PORT 8080)"
+                    url="http://${ip}:${port}"
+                    ;;
+                jellyfin)
+                    port="$(config_get S4D_JELLYFIN_PORT 8096)"
+                    url="http://${ip}:${port}"
+                    ;;
+                plex)
+                    url="http://${ip}:32400/web"
+                    ;;
+                filebrowser)
+                    port="$(config_get S4D_FILEBROWSER_PORT 8085)"
+                    url="http://${ip}:${port}"
+                    ;;
+                rtorrent)
+                    url="(SCGI - no web UI)"
+                    ;;
+                rutorrent)
+                    port="$(config_get S4D_RUTORRENT_PORT 443)"
+                    url="http://${ip}/rutorrent"
+                    ;;
+                tailscale)
+                    local ts_ip
+                    ts_ip="$(tailscale ip -4 2>/dev/null || echo 'N/A')"
+                    url="IP: ${ts_ip}"
+                    ;;
+                *)
+                    url="N/A"
+                    ;;
+            esac
+            
+            printf "  ${BOLD}${GREEN}│${RESET} %-16s ${BOLD}${GREEN}│${RESET} ${status_color}%-10s${RESET} ${BOLD}${GREEN}│${RESET} %-22s ${BOLD}${GREEN}│${RESET}\n" "$app" "$status" "$url"
+        done <<< "$installed_apps"
+        
+        printf "  ${BOLD}${GREEN}└──────────────────┴────────────┴────────────────────────┘${RESET}\n"
+    fi
     
     echo
-    msg_ok "s4dbox setup complete! Run 's4dbox' to open the management TUI"
+    
+    # Credentials
+    printf "  ${BOLD}${YELLOW}┌────────────────────────────────────────────────────────┐${RESET}\n"
+    printf "  ${BOLD}${YELLOW}│${RESET}  ${BOLD}Credentials & Access${RESET}                                ${BOLD}${YELLOW}│${RESET}\n"
+    printf "  ${BOLD}${YELLOW}├────────────────────────────────────────────────────────┤${RESET}\n"
+    printf "  ${BOLD}${YELLOW}│${RESET}  ${BOLD}Seedbox User:${RESET} %-40s${BOLD}${YELLOW}│${RESET}\n" "$username"
+    printf "  ${BOLD}${YELLOW}│${RESET}  ${BOLD}Password:${RESET}     %-40s${BOLD}${YELLOW}│${RESET}\n" "(the password you set during user creation)"
+    printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
+    
+    if app_is_installed "qbittorrent"; then
+        local qb_port
+        qb_port="$(config_get S4D_QB_PORT 8080)"
+        printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}qBittorrent${RESET}                                          ${BOLD}${YELLOW}│${RESET}\n"
+        printf "  ${BOLD}${YELLOW}│${RESET}    URL:  ${BOLD}http://${ip}:${qb_port}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((35 - ${#ip} - ${#qb_port}))" ""
+        printf "  ${BOLD}${YELLOW}│${RESET}    User: ${BOLD}${username}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((45 - ${#username}))" ""
+        printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
+    fi
+    
+    if app_is_installed "jellyfin"; then
+        local jf_port
+        jf_port="$(config_get S4D_JELLYFIN_PORT 8096)"
+        printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}Jellyfin${RESET}                                             ${BOLD}${YELLOW}│${RESET}\n"
+        printf "  ${BOLD}${YELLOW}│${RESET}    URL:  ${BOLD}http://${ip}:${jf_port}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((35 - ${#ip} - ${#jf_port}))" ""
+        printf "  ${BOLD}${YELLOW}│${RESET}    (Complete setup via web wizard on first visit)       ${BOLD}${YELLOW}│${RESET}\n"
+        printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
+    fi
+    
+    if app_is_installed "plex"; then
+        printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}Plex${RESET}                                                 ${BOLD}${YELLOW}│${RESET}\n"
+        printf "  ${BOLD}${YELLOW}│${RESET}    URL:  ${BOLD}http://${ip}:32400/web${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((25 - ${#ip}))" ""
+        printf "  ${BOLD}${YELLOW}│${RESET}    (Login with your Plex account)                      ${BOLD}${YELLOW}│${RESET}\n"
+        printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
+    fi
+    
+    if app_is_installed "filebrowser"; then
+        local fb_port
+        fb_port="$(config_get S4D_FILEBROWSER_PORT 8085)"
+        printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}FileBrowser${RESET}                                          ${BOLD}${YELLOW}│${RESET}\n"
+        printf "  ${BOLD}${YELLOW}│${RESET}    URL:  ${BOLD}http://${ip}:${fb_port}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((35 - ${#ip} - ${#fb_port}))" ""
+        printf "  ${BOLD}${YELLOW}│${RESET}    User: ${BOLD}${username}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((45 - ${#username}))" ""
+        printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
+    fi
+    
+    if app_is_installed "tailscale"; then
+        local ts_ip
+        ts_ip="$(tailscale ip -4 2>/dev/null || echo 'not connected')"
+        printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}Tailscale${RESET}                                            ${BOLD}${YELLOW}│${RESET}\n"
+        printf "  ${BOLD}${YELLOW}│${RESET}    Tailscale IP: ${BOLD}${ts_ip}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((37 - ${#ts_ip}))" ""
+        printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
+    fi
+    
+    printf "  ${BOLD}${YELLOW}└────────────────────────────────────────────────────────┘${RESET}\n"
+    echo
+    
+    printf "  ${BOLD}${GREEN}Setup complete!${RESET} Run ${BOLD}sudo s4dbox${RESET} to manage your seedbox.\n"
+    echo
     tui_pause
 }
 
