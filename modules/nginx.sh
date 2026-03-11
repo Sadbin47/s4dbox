@@ -6,13 +6,12 @@
 nginx_install() {
     if command -v nginx &>/dev/null; then
         msg_info "Nginx already installed"
-        return 0
-    fi    
-
-    msg_step "Installing Nginx"
-    spinner_start "Installing nginx"
-    pkg_install nginx
-    spinner_stop $?
+    else
+        msg_step "Installing Nginx"
+        spinner_start "Installing nginx"
+        pkg_install nginx
+        spinner_stop $?
+    fi
 
     # Create sites directories if they don't exist (RHEL/Arch)
     mkdir -p /etc/nginx/sites-available
@@ -71,6 +70,9 @@ EOF
 nginx_create_main_server() {
     local domain="${1:-_}"
     local port="${2:-80}"
+
+    mkdir -p /etc/nginx/sites-available
+    mkdir -p /etc/nginx/sites-enabled
 
     cat > /etc/nginx/sites-available/s4dbox-main.conf <<EOF
 # s4dbox Main Server Block
