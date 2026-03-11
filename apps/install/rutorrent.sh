@@ -18,11 +18,14 @@ install_rutorrent() {
 
     msg_step "Installing ruTorrent"
 
-    # Install nginx and PHP
-    spinner_start "Installing web server dependencies"
+    # ── Use s4dbox nginx module to set up nginx properly ──
+    # This ensures sites-enabled include is in nginx.conf, dirs exist, default server is handled
+    nginx_install
+
+    # Install PHP dependencies
+    spinner_start "Installing PHP dependencies"
     case "$S4D_DISTRO_FAMILY" in
         debian)
-            pkg_install nginx
             pkg_install php-fpm
             pkg_install php-cli
             pkg_install php-curl
@@ -34,14 +37,18 @@ install_rutorrent() {
             pkg_install ffmpeg 2>/dev/null || true
             ;;
         arch)
-            pkg_install nginx
             pkg_install php-fpm
             pkg_install php
             pkg_install mediainfo
             pkg_install ffmpeg
+            # Enable required PHP extensions on Arch
+            for ext in curl xml mbstring sockets; do
+                if [[ -f /etc/php/php.ini ]]; then
+                    sed -i "s/^;extension=${ext}/extension=${ext}/" /etc/php/php.ini 2>/dev/null
+                fi
+            done
             ;;
         rhel)
-            pkg_install nginx
             pkg_install php-fpm
             pkg_install php-cli
             pkg_install php-curl
@@ -83,10 +90,22 @@ install_rutorrent() {
         sed -i "s|\$scgi_host = .*|\$scgi_host = \"127.0.0.1\";|" "${rutorrent_dir}/conf/config.php"
     fi
 
-    # Create nginx config for ruTorrent
+    # ── Start PHP-FPM first so the socket exists ──
+    local phpfpm_svc
+    phpfpm_svc="$(systemctl list-unit-files 2>/dev/null | grep -oP 'php[0-9.]*-fpm\.service' | head -1)"
+    [[ -z "$phpfpm_svc" ]] && phpfpm_svc="php-fpm.service"
+    systemctl enable "$phpfpm_svc" 2>/dev/null || true
+    systemctl restart "$phpfpm_svc" 2>/dev/null || true
+    sleep 1  # give it time to create the socket
+
+    # Detect PHP-FPM socket (search common paths after php-fpm is running)
     local php_sock
-    php_sock="$(find /var/run/php/ /run/php-fpm/ /run/php/ /var/run/ -name 'php*.sock' 2>/dev/null | head -1)"
+    php_sock="$(find /var/run/php/ /run/php-fpm/ /run/php/ /run/ /var/run/ -name 'php*.sock' -o -name 'php-fpm.sock' 2>/dev/null | head -1)"
     [[ -z "$php_sock" ]] && php_sock="/run/php-fpm/php-fpm.sock"
+
+    # Create nginx server block for ruTorrent
+    mkdir -p /etc/nginx/sites-available
+    mkdir -p /etc/nginx/sites-enabled
 
     cat > /etc/nginx/sites-available/rutorrent.conf <<EOF
 server {
@@ -121,32 +140,26 @@ EOF
     rt_password="$(tui_password "ruTorrent web password")"
     [[ -z "$rt_password" ]] && rt_password="rutorrent"
     
-    if command -v htpasswd &>/dev/null; then
-        htpasswd -bc /etc/nginx/.htpasswd_rutorrent "$username" "$rt_password" 2>/dev/null
-    else
-        # Fallback: install apache2-utils / httpd-tools
+    if ! command -v htpasswd &>/dev/null; then
         case "$S4D_DISTRO_FAMILY" in
             debian) pkg_install apache2-utils ;;
             arch)   pkg_install apache ;;
             rhel)   pkg_install httpd-tools ;;
         esac
-        htpasswd -bc /etc/nginx/.htpasswd_rutorrent "$username" "$rt_password" 2>/dev/null
     fi
+    htpasswd -bc /etc/nginx/.htpasswd_rutorrent "$username" "$rt_password" 2>/dev/null
 
-    # Enable site
-    mkdir -p /etc/nginx/sites-available 2>/dev/null
-    mkdir -p /etc/nginx/sites-enabled 2>/dev/null
-    ln -sf /etc/nginx/sites-available/rutorrent.conf /etc/nginx/sites-enabled/ 2>/dev/null
+    # Enable the site
+    ln -sf /etc/nginx/sites-available/rutorrent.conf /etc/nginx/sites-enabled/
 
-    # Detect correct php-fpm service name
-    local phpfpm_svc
-    phpfpm_svc="$(systemctl list-unit-files 2>/dev/null | grep -oP 'php[0-9.]*-fpm\.service' | head -1)"
-    [[ -z "$phpfpm_svc" ]] && phpfpm_svc="php-fpm.service"
-
-    # Restart services
-    systemctl enable nginx "${phpfpm_svc}" 2>/dev/null || true
-    nginx -t 2>/dev/null && systemctl restart nginx 2>/dev/null || msg_warn "Nginx config test failed — check manually"
-    systemctl restart "${phpfpm_svc}" 2>/dev/null || true
+    # Test and restart nginx
+    if nginx -t 2>/dev/null; then
+        systemctl restart nginx 2>/dev/null
+        msg_ok "Nginx started with ruTorrent config"
+    else
+        msg_warn "Nginx config test failed — checking details:"
+        nginx -t 2>&1 | while IFS= read -r line; do msg_warn "  $line"; done
+    fi
 
     config_set "S4D_RUTORRENT_PORT" "$port"
     config_set "S4D_NGINX_ENABLED" "1"
