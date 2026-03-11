@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # s4dbox - Color and output formatting library
-# Lightweight terminal output functions
+# Uses ANSI-C quoting to store actual escape bytes
 
-# Colors
-export RED='\033[0;31m'
-export GREEN='\033[0;32m'
-export YELLOW='\033[0;33m'
-export BLUE='\033[0;34m'
-export MAGENTA='\033[0;35m'
-export CYAN='\033[0;36m'
-export WHITE='\033[1;37m'
-export DIM='\033[2m'
-export BOLD='\033[1m'
-export RESET='\033[0m'
+# Colors (ANSI-C quoting — works with printf '%s' and '%b')
+export RED=$'\033[0;31m'
+export GREEN=$'\033[0;32m'
+export YELLOW=$'\033[0;33m'
+export BLUE=$'\033[0;34m'
+export MAGENTA=$'\033[0;35m'
+export CYAN=$'\033[0;36m'
+export WHITE=$'\033[1;37m'
+export DIM=$'\033[2m'
+export BOLD=$'\033[1m'
+export RESET=$'\033[0m'
 
 # Reverse / highlight
-export REV='\033[7m'
+export REV=$'\033[7m'
 
 msg_info() {
     printf "${GREEN}[INFO]${RESET} %s\n" "$1"
