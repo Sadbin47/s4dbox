@@ -247,4 +247,3 @@ monitor_live() {
 monitor_snapshot() {
     monitor_live
 }
-}
