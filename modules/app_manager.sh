@@ -134,6 +134,15 @@ app_status() {
             ;;
         filebrowser) service_name="filebrowser" ;;
         rtorrent)    service_name="rtorrent@*" ;;
+        rutorrent)
+            # ruTorrent is a PHP web app served by nginx — check nginx + php-fpm
+            if systemctl is-active nginx &>/dev/null && [[ -d /var/www/rutorrent ]]; then
+                echo "running"
+            else
+                echo "stopped"
+            fi
+            return
+            ;;
         tailscale)   service_name="tailscaled" ;;
         *)           service_name="$app" ;;
     esac

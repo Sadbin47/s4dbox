@@ -225,7 +225,7 @@ first_time_setup() {
                     url="http://${ip}:32400/web"
                     ;;
                 filebrowser)
-                    port="$(config_get S4D_FILEBROWSER_PORT 8085)"
+                    port="$(config_get S4D_FILEBROWSER_PORT 8090)"
                     url="http://${ip}:${port}"
                     ;;
                 rtorrent)
@@ -288,7 +288,7 @@ first_time_setup() {
     
     if app_is_installed "filebrowser"; then
         local fb_port
-        fb_port="$(config_get S4D_FILEBROWSER_PORT 8085)"
+        fb_port="$(config_get S4D_FILEBROWSER_PORT 8090)"
         printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}FileBrowser${RESET}                                          ${BOLD}${YELLOW}│${RESET}\n"
         printf "  ${BOLD}${YELLOW}│${RESET}    URL:  ${BOLD}http://${ip}:${fb_port}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((35 - ${#ip} - ${#fb_port}))" ""
         printf "  ${BOLD}${YELLOW}│${RESET}    User: ${BOLD}${username}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((45 - ${#username}))" ""

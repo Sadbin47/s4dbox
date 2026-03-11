@@ -17,14 +17,23 @@ nginx_install() {
     mkdir -p /etc/nginx/sites-available
     mkdir -p /etc/nginx/sites-enabled
 
-    # Include sites-enabled in main config if not already
-    if ! grep -q 'sites-enabled' /etc/nginx/nginx.conf 2>/dev/null; then
-        # Add include before the last closing brace
-        sed -i '/^}/i\    include /etc/nginx/sites-enabled/*.conf;' /etc/nginx/nginx.conf 2>/dev/null
+    # Include sites-enabled in nginx.conf inside http block (if not already)
+    if ! grep -q 'include.*/etc/nginx/sites-enabled' /etc/nginx/nginx.conf 2>/dev/null; then
+        # Insert inside http{} block — find 'http {' and add after it
+        if grep -q 'http\s*{' /etc/nginx/nginx.conf 2>/dev/null; then
+            sed -i '/http\s*{/a\    include /etc/nginx/sites-enabled/*.conf;' /etc/nginx/nginx.conf 2>/dev/null
+        fi
+    fi
+
+    # Remove default server block from nginx.conf on Arch (it conflicts with our sites)
+    # Back up first, then comment out any server{} inside http{} in main config
+    if [[ "$S4D_DISTRO_FAMILY" == "arch" ]]; then
+        # Remove the default server block shipped in nginx.conf
+        sed -i '/^\s*server\s*{/,/^\s*}/{ s/^/#s4d#/; }' /etc/nginx/nginx.conf 2>/dev/null
     fi
 
     systemctl enable nginx 2>/dev/null
-    systemctl start nginx
+    systemctl start nginx 2>/dev/null || systemctl reload nginx 2>/dev/null || true
     config_set "S4D_NGINX_ENABLED" "1"
     
     log_info "Nginx installed and enabled"
@@ -37,7 +46,10 @@ nginx_create_proxy() {
     local upstream_port="$2"
     local location="${3:-/$app_name}"
     
-    cat > "/etc/nginx/sites-available/${app_name}.conf" <<EOF
+    # Proxy location blocks go into apps/ subdir — included by main server block
+    mkdir -p /etc/nginx/sites-available/apps
+    
+    cat > "/etc/nginx/sites-available/apps/${app_name}.conf" <<EOF
 # s4dbox reverse proxy for ${app_name}
 location ${location}/ {
     proxy_pass http://127.0.0.1:${upstream_port}/;
@@ -53,15 +65,15 @@ location ${location}/ {
 }
 EOF
     
-    ln -sf "/etc/nginx/sites-available/${app_name}.conf" "/etc/nginx/sites-enabled/" 2>/dev/null
+    # These are NOT symlinked to sites-enabled — they're included via the main server block
     
     if nginx -t &>/dev/null; then
-        systemctl reload nginx
+        systemctl reload nginx 2>/dev/null || true
         log_info "Nginx proxy created for ${app_name} -> port ${upstream_port}"
         return 0
     else
         msg_error "Nginx config test failed for ${app_name}"
-        rm -f "/etc/nginx/sites-enabled/${app_name}.conf"
+        rm -f "/etc/nginx/sites-available/apps/${app_name}.conf"
         return 1
     fi
 }

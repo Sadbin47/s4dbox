@@ -85,8 +85,8 @@ install_rutorrent() {
 
     # Create nginx config for ruTorrent
     local php_sock
-    php_sock="$(find /var/run/php/ -name '*.sock' 2>/dev/null | head -1)"
-    [[ -z "$php_sock" ]] && php_sock="/var/run/php/php-fpm.sock"
+    php_sock="$(find /var/run/php/ /run/php-fpm/ /run/php/ /var/run/ -name 'php*.sock' 2>/dev/null | head -1)"
+    [[ -z "$php_sock" ]] && php_sock="/run/php-fpm/php-fpm.sock"
 
     cat > /etc/nginx/sites-available/rutorrent.conf <<EOF
 server {
@@ -134,13 +134,19 @@ EOF
     fi
 
     # Enable site
-    ln -sf /etc/nginx/sites-available/rutorrent.conf /etc/nginx/sites-enabled/ 2>/dev/null
+    mkdir -p /etc/nginx/sites-available 2>/dev/null
     mkdir -p /etc/nginx/sites-enabled 2>/dev/null
+    ln -sf /etc/nginx/sites-available/rutorrent.conf /etc/nginx/sites-enabled/ 2>/dev/null
+
+    # Detect correct php-fpm service name
+    local phpfpm_svc
+    phpfpm_svc="$(systemctl list-unit-files 2>/dev/null | grep -oP 'php[0-9.]*-fpm\.service' | head -1)"
+    [[ -z "$phpfpm_svc" ]] && phpfpm_svc="php-fpm.service"
 
     # Restart services
-    systemctl enable nginx php-fpm 2>/dev/null || systemctl enable nginx "php*-fpm" 2>/dev/null
-    systemctl restart nginx
-    systemctl restart php-fpm 2>/dev/null || systemctl restart "php*-fpm" 2>/dev/null
+    systemctl enable nginx "${phpfpm_svc}" 2>/dev/null || true
+    nginx -t 2>/dev/null && systemctl restart nginx 2>/dev/null || msg_warn "Nginx config test failed — check manually"
+    systemctl restart "${phpfpm_svc}" 2>/dev/null || true
 
     config_set "S4D_RUTORRENT_PORT" "$port"
     config_set "S4D_NGINX_ENABLED" "1"
