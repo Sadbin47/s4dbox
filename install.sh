@@ -148,42 +148,30 @@ download_s4dbox() {
     
     info "Downloading s4dbox (branch: ${S4D_BRANCH})..."
     
-    # Prefer archive download — no auth needed, works for public repos
-    download_archive "${tmp_dir}" && {
-        true
-    } || {
-        # Fallback: try git clone with prompts disabled
-        if command -v git &>/dev/null; then
-            warn "Archive download failed, trying git clone..."
-            GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "${S4D_BRANCH}" "${S4D_REPO}.git" "${tmp_dir}/s4dbox" 2>/dev/null && {
-                mv "${tmp_dir}/s4dbox" "${S4D_INSTALL_DIR}"
-                ok "Downloaded via git"
-            } || {
-                die "Failed to download s4dbox. Check your internet connection and that the repo is public."
-            }
-        else
-            die "Download failed and git is not available."
-        fi
-    }
+    # Use archive download — no auth needed for public repos, no git prompts
+    local archive_url="${S4D_REPO}/archive/refs/heads/${S4D_BRANCH}.tar.gz"
+    
+    if curl -fsSL "${archive_url}" -o "${tmp_dir}/s4dbox.tar.gz" 2>/dev/null; then
+        tar -xzf "${tmp_dir}/s4dbox.tar.gz" -C "${tmp_dir}"
+        mv "${tmp_dir}"/s4dbox-*/ "${S4D_INSTALL_DIR}"
+        ok "Downloaded via archive"
+    elif wget -qO "${tmp_dir}/s4dbox.tar.gz" "${archive_url}" 2>/dev/null; then
+        tar -xzf "${tmp_dir}/s4dbox.tar.gz" -C "${tmp_dir}"
+        mv "${tmp_dir}"/s4dbox-*/ "${S4D_INSTALL_DIR}"
+        ok "Downloaded via archive"
+    elif command -v git &>/dev/null; then
+        warn "Archive download failed, trying git clone..."
+        GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "${S4D_BRANCH}" "${S4D_REPO}.git" "${tmp_dir}/s4dbox" 2>/dev/null \
+            || die "Failed to download s4dbox. Check your internet connection."
+        mv "${tmp_dir}/s4dbox" "${S4D_INSTALL_DIR}"
+        ok "Downloaded via git"
+    else
+        die "Failed to download s4dbox. Neither curl, wget, nor git succeeded."
+    fi
     
     rm -rf "${tmp_dir}"
 }
 
-download_archive() {
-    local tmp_dir="$1"
-    local archive_url="${S4D_REPO}/archive/refs/heads/${S4D_BRANCH}.tar.gz"
-    
-    if command -v curl &>/dev/null; then
-        curl -fsSL "${archive_url}" | tar -xz -C "${tmp_dir}"
-    elif command -v wget &>/dev/null; then
-        wget -qO- "${archive_url}" | tar -xz -C "${tmp_dir}"
-    else
-        die "Neither curl nor wget available"
-    fi
-    
-    mv "${tmp_dir}"/s4dbox-* "${S4D_INSTALL_DIR}"
-    ok "Downloaded via archive"
-}
 
 #── Install s4dbox for local development / already-downloaded ──
 install_local() {
