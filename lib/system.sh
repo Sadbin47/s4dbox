@@ -207,9 +207,10 @@ install_core_deps() {
     
     # Add distro-specific names
     case "$S4D_DISTRO_FAMILY" in
-        debian) deps+=(coreutils net-tools ethtool iproute2 lsb-release) ;;
-        arch)   deps+=(coreutils net-tools ethtool iproute2) ;;
-        rhel)   deps+=(coreutils net-tools ethtool iproute) ;;
+        debian) deps+=(coreutils net-tools ethtool iproute2 lsb-release ufw) ;;
+        arch)   deps+=(coreutils net-tools ethtool iproute2 ufw) ;;
+        rhel)   deps+=(coreutils net-tools ethtool iproute firewalld) ;;
+        suse)   deps+=(coreutils net-tools ethtool iproute2 firewalld) ;;
     esac
 
     for dep in "${deps[@]}"; do

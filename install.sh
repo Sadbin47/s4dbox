@@ -107,24 +107,30 @@ install_deps() {
     info "Installing core dependencies..."
     
     local deps_common="git curl wget"
+    local deps_firewall=""
     
     case "$PKG_MGR" in
         apt)
+            deps_firewall="ufw"
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
-            apt-get install -y -qq ${deps_common} >/dev/null 2>&1
+            apt-get install -y -qq ${deps_common} ${deps_firewall} >/dev/null 2>&1
             ;;
         pacman)
-            pacman -Sy --noconfirm --needed ${deps_common} >/dev/null 2>&1
+            deps_firewall="ufw"
+            pacman -Sy --noconfirm --needed ${deps_common} ${deps_firewall} >/dev/null 2>&1
             ;;
         dnf)
-            dnf install -y -q ${deps_common} >/dev/null 2>&1
+            deps_firewall="firewalld"
+            dnf install -y -q ${deps_common} ${deps_firewall} >/dev/null 2>&1
             ;;
         yum)
-            yum install -y -q ${deps_common} >/dev/null 2>&1
+            deps_firewall="firewalld"
+            yum install -y -q ${deps_common} ${deps_firewall} >/dev/null 2>&1
             ;;
         zypper)
-            zypper install -y -q ${deps_common} >/dev/null 2>&1
+            deps_firewall="firewalld"
+            zypper install -y -q ${deps_common} ${deps_firewall} >/dev/null 2>&1
             ;;
     esac
     

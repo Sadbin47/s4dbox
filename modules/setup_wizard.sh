@@ -304,14 +304,22 @@ first_time_setup() {
                         case "$app" in
                             wireguard)
                                 msg_warn "wireguard needs /etc/wireguard/wg0.conf"
-                                if tui_confirm "Try starting WireGuard now anyway?"; then
-                                    app_restart "$app" || msg_warn "WireGuard start failed (likely missing config)"
+                                if [[ -f /etc/wireguard/wg0.conf ]]; then
+                                    if tui_confirm "WireGuard config found. Start WireGuard now?"; then
+                                        app_restart "$app" || msg_warn "WireGuard start failed"
+                                    fi
+                                else
+                                    msg_info "Skipping start: create /etc/wireguard/wg0.conf first"
                                 fi
                                 ;;
                             openvpn)
                                 msg_warn "openvpn needs /etc/openvpn/server/server.conf"
-                                if tui_confirm "Try starting OpenVPN now anyway?"; then
-                                    app_restart "$app" || msg_warn "OpenVPN start failed (likely missing config)"
+                                if [[ -f /etc/openvpn/server/server.conf ]]; then
+                                    if tui_confirm "OpenVPN config found. Start OpenVPN now?"; then
+                                        app_restart "$app" || msg_warn "OpenVPN start failed"
+                                    fi
+                                else
+                                    msg_info "Skipping start: create /etc/openvpn/server/server.conf first"
                                 fi
                                 ;;
                             autodl_irssi)

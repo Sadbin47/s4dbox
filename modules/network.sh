@@ -160,6 +160,40 @@ network_vpn_status() {
     echo
 }
 
+network_firewall_allow_port() {
+    local port="$1"
+    local proto="$2"
+
+    [[ "$port" =~ ^[0-9]+$ ]] || return 1
+    [[ "$port" -ge 1 && "$port" -le 65535 ]] || return 1
+    [[ "$proto" == "TCP" || "$proto" == "UDP" ]] || return 1
+
+    if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -qi '^Status: active'; then
+        ufw allow "${port}/${proto,,}" comment "s4dbox port-forward" >/dev/null 2>&1
+        return $?
+    fi
+
+    if command -v firewall-cmd &>/dev/null && firewall-cmd --state &>/dev/null; then
+        firewall-cmd --permanent --add-port="${port}/${proto,,}" >/dev/null 2>&1 || return 1
+        firewall-cmd --reload >/dev/null 2>&1 || return 1
+        return 0
+    fi
+
+    return 2
+}
+
+network_add_forward_entry() {
+    local -n _entries_ref=$1
+    local port="$2"
+    local proto="$3"
+    local name="$4"
+
+    [[ "$port" =~ ^[0-9]+$ ]] || return 0
+    [[ "$port" -ge 1 && "$port" -le 65535 ]] || return 0
+    [[ "$proto" == "TCP" || "$proto" == "UDP" ]] || return 0
+    _entries_ref+=("${port}:${proto}:${name}")
+}
+
 # ─── Port Forwarding (UPnP/NAT-PMP) ───
 network_port_forwarding() {
     msg_header "Port Forwarding Wizard"
@@ -192,36 +226,42 @@ network_port_forwarding() {
 
     app_is_installed "qbittorrent" && {
         p="$(config_get S4D_QB_PORT 8080)"
-        entries+=("${p}:TCP:qBittorrent-WebUI")
+        network_add_forward_entry entries "$p" "TCP" "qBittorrent-WebUI"
         p="$(config_get S4D_QB_INCOMING_PORT 45000)"
-        entries+=("${p}:TCP:qBittorrent-Incoming")
-        entries+=("${p}:UDP:qBittorrent-Incoming")
+        network_add_forward_entry entries "$p" "TCP" "qBittorrent-Incoming"
+        network_add_forward_entry entries "$p" "UDP" "qBittorrent-Incoming"
     }
-    app_is_installed "transmission" && entries+=("$(config_get S4D_TRANSMISSION_PORT 9091):TCP:Transmission-WebUI")
-    app_is_installed "rutorrent" && entries+=("$(config_get S4D_RUTORRENT_PORT 8081):TCP:ruTorrent")
-    app_is_installed "jellyfin" && entries+=("$(config_get S4D_JELLYFIN_PORT 8096):TCP:Jellyfin")
-    app_is_installed "plex" && entries+=("32400:TCP:Plex")
-    app_is_installed "filebrowser" && entries+=("$(config_get S4D_FILEBROWSER_PORT 8090):TCP:FileBrowser")
-    app_is_installed "sonarr" && entries+=("$(config_get S4D_SONARR_PORT 8989):TCP:Sonarr")
-    app_is_installed "prowlarr" && entries+=("$(config_get S4D_PROWLARR_PORT 9696):TCP:Prowlarr")
-    app_is_installed "jackett" && entries+=("$(config_get S4D_JACKETT_PORT 9117):TCP:Jackett")
-    app_is_installed "jellyseerr" && entries+=("$(config_get S4D_JELLYSEERR_PORT 5055):TCP:Jellyseerr")
-    app_is_installed "autobrr" && entries+=("$(config_get S4D_AUTOBRR_PORT 7474):TCP:autobrr")
-    app_is_installed "maketorrent_webui" && entries+=("$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899):TCP:MakeTorrent-WebUI")
-    app_is_installed "nextcloud" && entries+=("$(config_get S4D_NEXTCLOUD_PORT 8082):TCP:Nextcloud")
-    app_is_installed "cloudreve" && entries+=("$(config_get S4D_CLOUDREVE_PORT 5212):TCP:Cloudreve")
-    app_is_installed "qui" && entries+=("$(config_get S4D_QUI_PORT 7476):TCP:Qui")
+    app_is_installed "transmission" && network_add_forward_entry entries "$(config_get S4D_TRANSMISSION_PORT 9091)" "TCP" "Transmission-WebUI"
+    app_is_installed "rutorrent" && network_add_forward_entry entries "$(config_get S4D_RUTORRENT_PORT 8081)" "TCP" "ruTorrent"
+    app_is_installed "jellyfin" && network_add_forward_entry entries "$(config_get S4D_JELLYFIN_PORT 8096)" "TCP" "Jellyfin"
+    app_is_installed "plex" && network_add_forward_entry entries "32400" "TCP" "Plex"
+    app_is_installed "filebrowser" && network_add_forward_entry entries "$(config_get S4D_FILEBROWSER_PORT 8090)" "TCP" "FileBrowser"
+    app_is_installed "sonarr" && network_add_forward_entry entries "$(config_get S4D_SONARR_PORT 8989)" "TCP" "Sonarr"
+    app_is_installed "prowlarr" && network_add_forward_entry entries "$(config_get S4D_PROWLARR_PORT 9696)" "TCP" "Prowlarr"
+    app_is_installed "jackett" && network_add_forward_entry entries "$(config_get S4D_JACKETT_PORT 9117)" "TCP" "Jackett"
+    app_is_installed "jellyseerr" && network_add_forward_entry entries "$(config_get S4D_JELLYSEERR_PORT 5055)" "TCP" "Jellyseerr"
+    app_is_installed "autobrr" && network_add_forward_entry entries "$(config_get S4D_AUTOBRR_PORT 7474)" "TCP" "autobrr"
+    app_is_installed "maketorrent_webui" && network_add_forward_entry entries "$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899)" "TCP" "MakeTorrent-WebUI"
+    app_is_installed "nextcloud" && network_add_forward_entry entries "$(config_get S4D_NEXTCLOUD_PORT 8082)" "TCP" "Nextcloud"
+    app_is_installed "cloudreve" && network_add_forward_entry entries "$(config_get S4D_CLOUDREVE_PORT 5212)" "TCP" "Cloudreve"
+    app_is_installed "qui" && network_add_forward_entry entries "$(config_get S4D_QUI_PORT 7476)" "TCP" "Qui"
+
+    if [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]] || systemctl is-active nginx &>/dev/null; then
+        network_add_forward_entry entries "80" "TCP" "HTTP"
+        network_add_forward_entry entries "443" "TCP" "HTTPS"
+    fi
+
     app_is_installed "vnc_desktop" && {
-        entries+=("$(config_get S4D_VNC_WEB_PORT 6080):TCP:VNC-Web")
-        entries+=("$(config_get S4D_VNC_PORT 5900):TCP:VNC")
+        network_add_forward_entry entries "$(config_get S4D_VNC_WEB_PORT 6080)" "TCP" "VNC-Web"
+        network_add_forward_entry entries "$(config_get S4D_VNC_PORT 5900)" "TCP" "VNC"
     }
     app_is_installed "filezilla_gui" && {
-        entries+=("$(config_get S4D_FILEZILLA_WEB_PORT 5801):TCP:FileZilla-Web")
-        entries+=("$(config_get S4D_FILEZILLA_VNC_PORT 5901):TCP:FileZilla-VNC")
+        network_add_forward_entry entries "$(config_get S4D_FILEZILLA_WEB_PORT 5801)" "TCP" "FileZilla-Web"
+        network_add_forward_entry entries "$(config_get S4D_FILEZILLA_VNC_PORT 5901)" "TCP" "FileZilla-VNC"
     }
     app_is_installed "jdownloader2_gui" && {
-        entries+=("$(config_get S4D_JDOWNLOADER2_WEB_PORT 5802):TCP:JDownloader2-Web")
-        entries+=("$(config_get S4D_JDOWNLOADER2_VNC_PORT 5902):TCP:JDownloader2-VNC")
+        network_add_forward_entry entries "$(config_get S4D_JDOWNLOADER2_WEB_PORT 5802)" "TCP" "JDownloader2-Web"
+        network_add_forward_entry entries "$(config_get S4D_JDOWNLOADER2_VNC_PORT 5902)" "TCP" "JDownloader2-VNC"
     }
 
     if [[ ${#entries[@]} -eq 0 ]]; then
@@ -247,13 +287,19 @@ network_port_forwarding() {
         forward_all=0
     fi
 
-    local success=0 failed=0
+    local success=0 failed=0 fw_opened=0 fw_failed=0
     if [[ "$forward_all" -eq 1 ]]; then
         for item in "${entries[@]}"; do
             IFS=':' read -r p proto name <<< "$item"
             if upnpc -a "$local_ip" "$p" "$p" "$proto" >/dev/null 2>&1; then
                 msg_ok "Forwarded ${name} on ${p}/${proto}"
                 success=$((success + 1))
+
+                network_firewall_allow_port "$p" "$proto"
+                case $? in
+                    0) fw_opened=$((fw_opened + 1)) ;;
+                    1) fw_failed=$((fw_failed + 1)) ;;
+                esac
             else
                 msg_warn "Failed to forward ${name} on ${p}/${proto}"
                 failed=$((failed + 1))
@@ -266,6 +312,12 @@ network_port_forwarding() {
                 if upnpc -a "$local_ip" "$p" "$p" "$proto" >/dev/null 2>&1; then
                     msg_ok "Forwarded ${name} on ${p}/${proto}"
                     success=$((success + 1))
+
+                    network_firewall_allow_port "$p" "$proto"
+                    case $? in
+                        0) fw_opened=$((fw_opened + 1)) ;;
+                        1) fw_failed=$((fw_failed + 1)) ;;
+                    esac
                 else
                     msg_warn "Failed to forward ${name} on ${p}/${proto}"
                     failed=$((failed + 1))
@@ -276,7 +328,16 @@ network_port_forwarding() {
 
     echo
     msg_info "Port forwarding completed: ${success} success, ${failed} failed"
-    msg_info "If all fail, your router may not support UPnP/NAT-PMP or it is disabled"
+    if [[ "$fw_opened" -gt 0 ]]; then
+        msg_info "Local firewall rules opened for ${fw_opened} forwarded mappings"
+    fi
+    if [[ "$fw_failed" -gt 0 ]]; then
+        msg_warn "${fw_failed} local firewall rules could not be added"
+    fi
+    if [[ "$failed" -gt 0 ]]; then
+        msg_info "If mappings fail, check router UPnP/NAT-PMP settings and run: upnpc -l"
+    fi
+    msg_info "If website access still fails, verify service is listening: ss -tulpen | grep ':80\\|:443'"
     return 0
 }
 
