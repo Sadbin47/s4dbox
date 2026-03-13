@@ -13,6 +13,32 @@ declare -A S4D_APP_DESC=(
     [rtorrent]="rTorrent - Torrent Client"
     [rutorrent]="ruTorrent - rTorrent Web UI"
     [tailscale]="Tailscale - VPN / Remote Access"
+    [wireguard]="WireGuard - VPN Tools"
+    [openvpn]="OpenVPN - VPN Server"
+    [transmission]="Transmission - Torrent Client"
+    [autodl_irssi]="autodl-irssi - IRC Auto Downloader"
+    [maketorrent_webui]="MakeTorrent WebUI - Torrent Creator"
+    [sonarr]="Sonarr V4 - TV Automation"
+    [readarr]="Readarr - Book Automation"
+    [jellyseerr]="Jellyseerr - Request Manager"
+    [autobrr]="autobrr - Automation"
+    [vnc_desktop]="VNC Desktop - Remote Desktop"
+    [filezilla_gui]="FileZilla GUI - FTP/SFTP Client"
+    [jdownloader2_gui]="JDownloader2 GUI - Downloader"
+    [nextcloud]="Nextcloud - Personal Cloud"
+    [cloudreve]="Cloudreve - Cloud File Manager"
+    [qui]="Qui - Torrent WebUI"
+    [ssh_tools]="CLI Tools Bundle - 7z/ffmpeg/mktorrent/etc"
+)
+
+# Curated install menu order (grouped by purpose for human-friendly UX)
+S4D_INSTALL_MENU_APPS=(
+    "qbittorrent" "transmission" "rtorrent" "rutorrent" "qui"
+    "jellyfin" "plex" "sonarr" "readarr" "jellyseerr"
+    "filebrowser" "nextcloud" "cloudreve" "maketorrent_webui"
+    "autobrr" "autodl_irssi" "ssh_tools"
+    "tailscale" "wireguard" "openvpn" "vnc_desktop"
+    "filezilla_gui" "jdownloader2_gui"
 )
 
 # List available apps
@@ -157,6 +183,37 @@ app_status() {
             return
             ;;
         tailscale)   service_name="tailscaled" ;;
+        wireguard)
+            if systemctl is-active wg-quick@wg0 &>/dev/null; then
+                echo "running"
+            else
+                echo "configured"
+            fi
+            return
+            ;;
+        openvpn)
+            if systemctl is-active openvpn-server@server &>/dev/null; then
+                echo "running"
+            else
+                echo "configured"
+            fi
+            return
+            ;;
+        autodl_irssi|ssh_tools)
+            echo "configured"
+            return
+            ;;
+        sonarr|readarr|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)
+            service_name="s4d-${app}.service"
+            ;;
+        maketorrent_webui) service_name="maketorrent-webui" ;;
+        transmission)
+            if systemctl list-unit-files | grep -q '^transmission-daemon\.service'; then
+                service_name="transmission-daemon"
+            else
+                service_name="transmission"
+            fi
+            ;;
         *)           service_name="$app" ;;
     esac
 
@@ -180,13 +237,24 @@ app_restart() {
         filebrowser) systemctl restart filebrowser ;;
         rtorrent)    systemctl restart "rtorrent@${user}" ;;
         tailscale)   systemctl restart tailscaled ;;
+        wireguard)   systemctl restart wg-quick@wg0 2>/dev/null || true ;;
+        openvpn)     systemctl restart openvpn-server@server 2>/dev/null || true ;;
+        transmission)
+            systemctl restart transmission-daemon 2>/dev/null || systemctl restart transmission 2>/dev/null || true
+            ;;
+        maketorrent_webui) systemctl restart maketorrent-webui ;;
+        sonarr|readarr|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)
+            systemctl restart "s4d-${app}.service" ;;
+        autodl_irssi|ssh_tools)
+            msg_info "${app} does not run as a service"
+            ;;
         *)           systemctl restart "$app" 2>/dev/null ;;
     esac
 }
 
 # ─── Interactive App Menu ───
 app_menu_install() {
-    local apps=("qbittorrent" "jellyfin" "plex" "filebrowser" "rtorrent" "rutorrent" "tailscale" "← Back")
+    local apps=("${S4D_INSTALL_MENU_APPS[@]}" "← Back")
     local labels=()
     
     for app in "${apps[@]}"; do

@@ -1,6 +1,6 @@
 # s4dbox — Lightweight Universal Seedbox Manager
 
-A modular seedbox management tool built entirely in Bash. No heavy runtimes, no containers — just shell scripts that directly manage your system.
+A modular seedbox management tool built in Bash with a clear app lifecycle and optional Docker-backed services for complex GUI apps.
 
 ## Features
 
@@ -50,17 +50,61 @@ sudo s4dbox status       # Show installed app status
 sudo s4dbox help         # Show help
 ```
 
+## Documentation
+
+- Project layout and conventions: `docs/PROJECT_ORGANIZATION.md`
+- App grouping and IDs: `docs/APPS_CATALOG.md`
+- First-time setup logic: `modules/setup_wizard.sh`
+
 ## Supported Applications
+
+### Torrent Clients
 
 | App | Description |
 |-----|-------------|
 | **qBittorrent** | Torrent client with pre-compiled binaries (4.3.9, 4.5.5, 4.6.7, 5.0.3, 5.1.0β1) |
-| **Jellyfin** | Open-source media server |
-| **Plex** | Media server |
-| **FileBrowser** | Web file manager |
+| **Transmission** | Lightweight torrent client |
 | **rTorrent** | CLI torrent client |
 | **ruTorrent** | rTorrent web UI |
+| **Qui** | Modern torrent web UI |
+
+### Media and Automation
+
+| App | Description |
+|-----|-------------|
+| **Jellyfin** | Open-source media server |
+| **Plex** | Media server |
+| **Sonarr V4** | TV series automation |
+| **Readarr** | Book/audiobook automation |
+| **Jellyseerr** | Media request management |
+| **autobrr** | Indexer automation and filtering |
+| **autodl-irssi** | IRC announce auto-downloader plugin |
+
+### File and Cloud
+
+| App | Description |
+|-----|-------------|
+| **FileBrowser** | Web file manager |
+| **Nextcloud** | Personal cloud platform |
+| **Cloudreve** | Multi-user cloud file manager |
+| **MakeTorrent WebUI** | Web interface for creating torrent files |
+
+### Tools Bundle
+
+| App | Description |
+|-----|-------------|
+| **CLI Tools Bundle** | 7z, ffmpeg, mediainfo, mktorrent, mkvinfo, unrar, unzip |
+
+### Network and Remote Access
+
+| App | Description |
+|-----|-------------|
 | **Tailscale** | WireGuard-based mesh VPN |
+| **WireGuard** | WireGuard tools and service-ready setup |
+| **OpenVPN** | OpenVPN service-ready setup |
+| **VNC Desktop** | Browser-accessible remote desktop |
+| **FileZilla GUI** | GUI FTP/SFTP client via web/VNC |
+| **JDownloader2 GUI** | GUI downloader via web/VNC |
 
 ## Project Structure
 
@@ -80,12 +124,26 @@ s4dbox/
 │   ├── network.sh      #   Network tools
 │   ├── nginx.sh        #   Nginx reverse proxy
 │   ├── security.sh     #   SSH, fail2ban, firewall
+│   ├── setup_wizard.sh #   First-time setup flow
 │   ├── storage.sh      #   Disk management
 │   ├── tui.sh          #   Terminal UI framework
 │   └── tune.sh         #   System tuning
 └── apps/               # Per-app scripts
-    ├── install/        #   Installation scripts
-    ├── remove/         #   Removal scripts
+    ├── install/        #   Compatibility shims + categorized installers
+    │   ├── torrent/
+    │   ├── media/
+    │   ├── file/
+    │   ├── automation/
+    │   ├── network/
+    │   ├── remote/
+    │   └── shared/
+    ├── remove/         #   Compatibility shims + categorized removers
+    │   ├── torrent/
+    │   ├── media/
+    │   ├── file/
+    │   ├── automation/
+    │   ├── network/
+    │   └── remote/
     ├── nginx/          #   Nginx configs
     └── configs/        #   App configs
 ```
@@ -107,7 +165,7 @@ s4dbox itself uses minimal resources:
 
 - Kernel & network tuning based on [jerry048/Tune](https://github.com/jerry048/Tune)
 - Pre-compiled qBittorrent binaries from [jerry048/Seedbox-Components](https://github.com/jerry048/Seedbox-Components)
-- Inspired by [swizzin](https://github.com/swizzin/swizzin), [QuickBox](https://github.com/amcrest/quickbox-lite), and [CasaOS](https://github.com/IceWhaleTech/CasaOS)
+- Inspired by [swizzin](https://github.com/swizzin/swizzin), [QuickBoxLite](https://github.com/amcrest/quickbox-lite), and [CasaOS](https://github.com/IceWhaleTech/CasaOS)
 
 ## License
 
