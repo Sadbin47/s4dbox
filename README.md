@@ -77,7 +77,6 @@ sudo s4dbox help         # Show help
 | **Sonarr V4** | TV series automation |
 | **Prowlarr** | Indexer manager |
 | **Jackett** | Indexer proxy and tracker integration |
-| **Readarr** | Book/audiobook automation |
 | **Jellyseerr** | Media request management |
 | **autobrr** | Indexer automation and filtering |
 | **autodl-irssi** | IRC announce auto-downloader plugin |

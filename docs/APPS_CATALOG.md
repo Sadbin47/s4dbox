@@ -21,7 +21,6 @@ Implementation path: `apps/install/*.sh` and `apps/remove/*.sh`
 - `sonarr`
 - `prowlarr`
 - `jackett`
-- `readarr`
 - `jellyseerr`
 
 ## File and Cloud

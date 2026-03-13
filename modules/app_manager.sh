@@ -21,7 +21,6 @@ declare -A S4D_APP_DESC=(
     [sonarr]="Sonarr V4 - TV Automation"
     [prowlarr]="Prowlarr - Indexer Manager"
     [jackett]="Jackett - Indexer Proxy"
-    [readarr]="Readarr - Book Automation"
     [jellyseerr]="Jellyseerr - Request Manager"
     [autobrr]="autobrr - Automation"
     [vnc_desktop]="VNC Desktop - Remote Desktop"
@@ -36,7 +35,7 @@ declare -A S4D_APP_DESC=(
 # Curated install menu order (grouped by purpose for human-friendly UX)
 S4D_INSTALL_MENU_APPS=(
     "qbittorrent" "transmission" "rtorrent" "rutorrent" "qui"
-    "jellyfin" "plex" "sonarr" "prowlarr" "jackett" "readarr" "jellyseerr"
+    "jellyfin" "plex" "sonarr" "prowlarr" "jackett" "jellyseerr"
     "filebrowser" "nextcloud" "cloudreve" "maketorrent_webui"
     "autobrr" "autodl_irssi" "ssh_tools"
     "tailscale" "wireguard" "openvpn" "vnc_desktop"
@@ -212,7 +211,7 @@ app_status() {
             echo "configured"
             return
             ;;
-        sonarr|prowlarr|jackett|readarr|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)
+        sonarr|prowlarr|jackett|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)
             service_name="s4d-${app}.service"
             ;;
         maketorrent_webui) service_name="maketorrent-webui" ;;
@@ -252,7 +251,7 @@ app_restart() {
             systemctl restart transmission-daemon 2>/dev/null || systemctl restart transmission 2>/dev/null
             ;;
         maketorrent_webui) systemctl restart maketorrent-webui ;;
-        sonarr|prowlarr|jackett|readarr|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)
+        sonarr|prowlarr|jackett|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)
             systemctl restart "s4d-${app}.service" ;;
         autodl_irssi|ssh_tools)
             msg_info "${app} does not run as a service"

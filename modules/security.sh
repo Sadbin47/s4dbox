@@ -194,7 +194,6 @@ firewall_setup() {
             app_is_installed "sonarr"     && ufw allow "$(config_get S4D_SONARR_PORT 8989)"/tcp comment 'Sonarr' 2>/dev/null
             app_is_installed "prowlarr"   && ufw allow "$(config_get S4D_PROWLARR_PORT 9696)"/tcp comment 'Prowlarr' 2>/dev/null
             app_is_installed "jackett"    && ufw allow "$(config_get S4D_JACKETT_PORT 9117)"/tcp comment 'Jackett' 2>/dev/null
-            app_is_installed "readarr"    && ufw allow "$(config_get S4D_READARR_PORT 8787)"/tcp comment 'Readarr' 2>/dev/null
             app_is_installed "jellyseerr" && ufw allow "$(config_get S4D_JELLYSEERR_PORT 5055)"/tcp comment 'Jellyseerr' 2>/dev/null
             app_is_installed "autobrr"    && ufw allow "$(config_get S4D_AUTOBRR_PORT 7474)"/tcp comment 'autobrr' 2>/dev/null
             app_is_installed "maketorrent_webui" && ufw allow "$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899)"/tcp comment 'MakeTorrent WebUI' 2>/dev/null
@@ -245,7 +244,6 @@ firewall_setup() {
             app_is_installed "sonarr"      && firewall-cmd --permanent --add-port="$(config_get S4D_SONARR_PORT 8989)/tcp" 2>/dev/null
             app_is_installed "prowlarr"    && firewall-cmd --permanent --add-port="$(config_get S4D_PROWLARR_PORT 9696)/tcp" 2>/dev/null
             app_is_installed "jackett"     && firewall-cmd --permanent --add-port="$(config_get S4D_JACKETT_PORT 9117)/tcp" 2>/dev/null
-            app_is_installed "readarr"     && firewall-cmd --permanent --add-port="$(config_get S4D_READARR_PORT 8787)/tcp" 2>/dev/null
             app_is_installed "jellyseerr"  && firewall-cmd --permanent --add-port="$(config_get S4D_JELLYSEERR_PORT 5055)/tcp" 2>/dev/null
             app_is_installed "autobrr"     && firewall-cmd --permanent --add-port="$(config_get S4D_AUTOBRR_PORT 7474)/tcp" 2>/dev/null
             app_is_installed "maketorrent_webui" && firewall-cmd --permanent --add-port="$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899)/tcp" 2>/dev/null

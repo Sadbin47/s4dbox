@@ -4,7 +4,7 @@
 # First-time setup app options and ID mapping (single source of truth)
 declare -a S4D_SETUP_APP_OPTIONS=(
     "qBittorrent" "Transmission" "rTorrent" "ruTorrent" "Qui"
-    "Jellyfin" "Plex" "Sonarr V4" "Prowlarr" "Jackett" "Readarr" "Jellyseerr"
+    "Jellyfin" "Plex" "Sonarr V4" "Prowlarr" "Jackett" "Jellyseerr"
     "FileBrowser" "Nextcloud" "Cloudreve" "MakeTorrent WebUI"
     "autobrr" "autodl-irssi" "CLI Tools Bundle"
     "Tailscale" "WireGuard" "OpenVPN" "VNC Desktop"
@@ -22,7 +22,6 @@ declare -A S4D_SETUP_APP_MAP=(
     ["Sonarr V4"]="sonarr"
     ["Prowlarr"]="prowlarr"
     ["Jackett"]="jackett"
-    ["Readarr"]="readarr"
     ["Jellyseerr"]="jellyseerr"
     ["FileBrowser"]="filebrowser"
     ["Nextcloud"]="nextcloud"
@@ -98,10 +97,6 @@ s4d_setup_access_url() {
             ;;
         jackett)
             port="$(config_get S4D_JACKETT_PORT 9117)"
-            echo "http://${ip}:${port}"
-            ;;
-        readarr)
-            port="$(config_get S4D_READARR_PORT 8787)"
             echo "http://${ip}:${port}"
             ;;
         jellyseerr)
@@ -367,7 +362,7 @@ first_time_setup() {
                 jellyfin|plex|nextcloud|cloudreve|jellyseerr)
                     hint="Finish web setup wizard on first visit"
                     ;;
-                sonarr|prowlarr|jackett|readarr|autobrr|qui)
+                sonarr|prowlarr|jackett|autobrr|qui)
                     hint="Configure app from the web UI"
                     ;;
                 wireguard)
