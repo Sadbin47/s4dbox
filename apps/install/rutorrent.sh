@@ -90,6 +90,11 @@ install_rutorrent() {
         sed -i "s|\$scgi_host = .*|\$scgi_host = \"127.0.0.1\";|" "${rutorrent_dir}/conf/config.php"
     fi
 
+    # Cloudflare plugin requires extra Python modules and is optional; disable by default.
+    if [[ -d "${rutorrent_dir}/plugins/_cloudflare" ]]; then
+        mv "${rutorrent_dir}/plugins/_cloudflare" "${rutorrent_dir}/plugins/_cloudflare.disabled" 2>/dev/null || true
+    fi
+
     # ── Start PHP-FPM first so the socket exists ──
     local phpfpm_svc
     phpfpm_svc="$(systemctl list-unit-files 2>/dev/null | grep -oP 'php[0-9.]*-fpm\.service' | head -1)"

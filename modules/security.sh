@@ -190,6 +190,29 @@ firewall_setup() {
             app_is_installed "plex"       && ufw allow 32400/tcp comment 'Plex' 2>/dev/null
             app_is_installed "filebrowser" && ufw allow "$(config_get S4D_FILEBROWSER_PORT 8090)"/tcp comment 'FileBrowser' 2>/dev/null
             app_is_installed "rutorrent"  && ufw allow "$(config_get S4D_RUTORRENT_PORT 8081)"/tcp comment 'ruTorrent' 2>/dev/null
+            app_is_installed "transmission" && ufw allow "$(config_get S4D_TRANSMISSION_PORT 9091)"/tcp comment 'Transmission' 2>/dev/null
+            app_is_installed "sonarr"     && ufw allow "$(config_get S4D_SONARR_PORT 8989)"/tcp comment 'Sonarr' 2>/dev/null
+            app_is_installed "prowlarr"   && ufw allow "$(config_get S4D_PROWLARR_PORT 9696)"/tcp comment 'Prowlarr' 2>/dev/null
+            app_is_installed "jackett"    && ufw allow "$(config_get S4D_JACKETT_PORT 9117)"/tcp comment 'Jackett' 2>/dev/null
+            app_is_installed "readarr"    && ufw allow "$(config_get S4D_READARR_PORT 8787)"/tcp comment 'Readarr' 2>/dev/null
+            app_is_installed "jellyseerr" && ufw allow "$(config_get S4D_JELLYSEERR_PORT 5055)"/tcp comment 'Jellyseerr' 2>/dev/null
+            app_is_installed "autobrr"    && ufw allow "$(config_get S4D_AUTOBRR_PORT 7474)"/tcp comment 'autobrr' 2>/dev/null
+            app_is_installed "maketorrent_webui" && ufw allow "$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899)"/tcp comment 'MakeTorrent WebUI' 2>/dev/null
+            app_is_installed "nextcloud"  && ufw allow "$(config_get S4D_NEXTCLOUD_PORT 8082)"/tcp comment 'Nextcloud' 2>/dev/null
+            app_is_installed "cloudreve"  && ufw allow "$(config_get S4D_CLOUDREVE_PORT 5212)"/tcp comment 'Cloudreve' 2>/dev/null
+            app_is_installed "qui"        && ufw allow "$(config_get S4D_QUI_PORT 7476)"/tcp comment 'Qui' 2>/dev/null
+            app_is_installed "vnc_desktop" && {
+                ufw allow "$(config_get S4D_VNC_WEB_PORT 6080)"/tcp comment 'VNC Desktop Web' 2>/dev/null
+                ufw allow "$(config_get S4D_VNC_PORT 5900)"/tcp comment 'VNC Desktop VNC' 2>/dev/null
+            }
+            app_is_installed "filezilla_gui" && {
+                ufw allow "$(config_get S4D_FILEZILLA_WEB_PORT 5801)"/tcp comment 'FileZilla GUI Web' 2>/dev/null
+                ufw allow "$(config_get S4D_FILEZILLA_VNC_PORT 5901)"/tcp comment 'FileZilla GUI VNC' 2>/dev/null
+            }
+            app_is_installed "jdownloader2_gui" && {
+                ufw allow "$(config_get S4D_JDOWNLOADER2_WEB_PORT 5802)"/tcp comment 'JDownloader2 GUI Web' 2>/dev/null
+                ufw allow "$(config_get S4D_JDOWNLOADER2_VNC_PORT 5902)"/tcp comment 'JDownloader2 GUI VNC' 2>/dev/null
+            }
             
             # Nginx
             [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]] && {
@@ -218,6 +241,29 @@ firewall_setup() {
             app_is_installed "plex"        && firewall-cmd --permanent --add-port="32400/tcp" 2>/dev/null
             app_is_installed "filebrowser" && firewall-cmd --permanent --add-port="$(config_get S4D_FILEBROWSER_PORT 8090)/tcp" 2>/dev/null
             app_is_installed "rutorrent"   && firewall-cmd --permanent --add-port="$(config_get S4D_RUTORRENT_PORT 8081)/tcp" 2>/dev/null
+            app_is_installed "transmission" && firewall-cmd --permanent --add-port="$(config_get S4D_TRANSMISSION_PORT 9091)/tcp" 2>/dev/null
+            app_is_installed "sonarr"      && firewall-cmd --permanent --add-port="$(config_get S4D_SONARR_PORT 8989)/tcp" 2>/dev/null
+            app_is_installed "prowlarr"    && firewall-cmd --permanent --add-port="$(config_get S4D_PROWLARR_PORT 9696)/tcp" 2>/dev/null
+            app_is_installed "jackett"     && firewall-cmd --permanent --add-port="$(config_get S4D_JACKETT_PORT 9117)/tcp" 2>/dev/null
+            app_is_installed "readarr"     && firewall-cmd --permanent --add-port="$(config_get S4D_READARR_PORT 8787)/tcp" 2>/dev/null
+            app_is_installed "jellyseerr"  && firewall-cmd --permanent --add-port="$(config_get S4D_JELLYSEERR_PORT 5055)/tcp" 2>/dev/null
+            app_is_installed "autobrr"     && firewall-cmd --permanent --add-port="$(config_get S4D_AUTOBRR_PORT 7474)/tcp" 2>/dev/null
+            app_is_installed "maketorrent_webui" && firewall-cmd --permanent --add-port="$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899)/tcp" 2>/dev/null
+            app_is_installed "nextcloud"   && firewall-cmd --permanent --add-port="$(config_get S4D_NEXTCLOUD_PORT 8082)/tcp" 2>/dev/null
+            app_is_installed "cloudreve"   && firewall-cmd --permanent --add-port="$(config_get S4D_CLOUDREVE_PORT 5212)/tcp" 2>/dev/null
+            app_is_installed "qui"         && firewall-cmd --permanent --add-port="$(config_get S4D_QUI_PORT 7476)/tcp" 2>/dev/null
+            app_is_installed "vnc_desktop" && {
+                firewall-cmd --permanent --add-port="$(config_get S4D_VNC_WEB_PORT 6080)/tcp" 2>/dev/null
+                firewall-cmd --permanent --add-port="$(config_get S4D_VNC_PORT 5900)/tcp" 2>/dev/null
+            }
+            app_is_installed "filezilla_gui" && {
+                firewall-cmd --permanent --add-port="$(config_get S4D_FILEZILLA_WEB_PORT 5801)/tcp" 2>/dev/null
+                firewall-cmd --permanent --add-port="$(config_get S4D_FILEZILLA_VNC_PORT 5901)/tcp" 2>/dev/null
+            }
+            app_is_installed "jdownloader2_gui" && {
+                firewall-cmd --permanent --add-port="$(config_get S4D_JDOWNLOADER2_WEB_PORT 5802)/tcp" 2>/dev/null
+                firewall-cmd --permanent --add-port="$(config_get S4D_JDOWNLOADER2_VNC_PORT 5902)/tcp" 2>/dev/null
+            }
             
             [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]] && {
                 firewall-cmd --permanent --add-service=http 2>/dev/null

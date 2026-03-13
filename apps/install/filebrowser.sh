@@ -39,7 +39,8 @@ install_filebrowser() {
     mkdir -p /etc/filebrowser
     mkdir -p "/home/${username}"
 
-    # Create database and config (split commands so a single bad flag can't kill everything)
+    # Recreate DB on install/reinstall so configured credentials match what user enters now.
+    rm -f /etc/filebrowser/filebrowser.db
     "$fb_bin" config init --database /etc/filebrowser/filebrowser.db 2>/dev/null || true
     "$fb_bin" config set --database /etc/filebrowser/filebrowser.db \
         --address 0.0.0.0 \
@@ -51,8 +52,11 @@ install_filebrowser() {
     fb_password="$(tui_password "FileBrowser admin password")"
     [[ -z "$fb_password" ]] && fb_password="admin"
     
-    "$fb_bin" users add "$username" "$fb_password" --perm.admin \
-        --database /etc/filebrowser/filebrowser.db 2>/dev/null || true
+    if ! "$fb_bin" users add "$username" "$fb_password" --perm.admin \
+        --database /etc/filebrowser/filebrowser.db 2>/dev/null; then
+        "$fb_bin" users update "$username" --password "$fb_password" --perm.admin \
+            --database /etc/filebrowser/filebrowser.db 2>/dev/null || true
+    fi
 
     # Create systemd service — pass address/port on command line too (belt and suspenders)
     cat > /etc/systemd/system/filebrowser.service <<EOF

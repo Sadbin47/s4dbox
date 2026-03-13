@@ -160,6 +160,127 @@ network_vpn_status() {
     echo
 }
 
+# ─── Port Forwarding (UPnP/NAT-PMP) ───
+network_port_forwarding() {
+    msg_header "Port Forwarding Wizard"
+    msg_warn "You are about to configure router port forwarding."
+    msg_warn "Forwarded ports are reachable from the public internet."
+    msg_info "Continue only if you understand the security impact."
+
+    if ! tui_confirm "Proceed with port forwarding setup?"; then
+        msg_info "Port forwarding skipped"
+        return 0
+    fi
+
+    if ! command -v upnpc &>/dev/null; then
+        msg_info "UPnP client not found (upnpc). Installing miniupnpc..."
+        if ! pkg_install miniupnpc; then
+            msg_error "Could not install miniupnpc/upnpc"
+            return 1
+        fi
+    fi
+
+    local local_ip
+    local_ip="$(get_local_ip)"
+    if [[ -z "$local_ip" ]]; then
+        msg_error "Could not detect local IP"
+        return 1
+    fi
+
+    local entries=()
+    local p
+
+    app_is_installed "qbittorrent" && {
+        p="$(config_get S4D_QB_PORT 8080)"
+        entries+=("${p}:TCP:qBittorrent-WebUI")
+        p="$(config_get S4D_QB_INCOMING_PORT 45000)"
+        entries+=("${p}:TCP:qBittorrent-Incoming")
+        entries+=("${p}:UDP:qBittorrent-Incoming")
+    }
+    app_is_installed "transmission" && entries+=("$(config_get S4D_TRANSMISSION_PORT 9091):TCP:Transmission-WebUI")
+    app_is_installed "rutorrent" && entries+=("$(config_get S4D_RUTORRENT_PORT 8081):TCP:ruTorrent")
+    app_is_installed "jellyfin" && entries+=("$(config_get S4D_JELLYFIN_PORT 8096):TCP:Jellyfin")
+    app_is_installed "plex" && entries+=("32400:TCP:Plex")
+    app_is_installed "filebrowser" && entries+=("$(config_get S4D_FILEBROWSER_PORT 8090):TCP:FileBrowser")
+    app_is_installed "sonarr" && entries+=("$(config_get S4D_SONARR_PORT 8989):TCP:Sonarr")
+    app_is_installed "prowlarr" && entries+=("$(config_get S4D_PROWLARR_PORT 9696):TCP:Prowlarr")
+    app_is_installed "jackett" && entries+=("$(config_get S4D_JACKETT_PORT 9117):TCP:Jackett")
+    app_is_installed "readarr" && entries+=("$(config_get S4D_READARR_PORT 8787):TCP:Readarr")
+    app_is_installed "jellyseerr" && entries+=("$(config_get S4D_JELLYSEERR_PORT 5055):TCP:Jellyseerr")
+    app_is_installed "autobrr" && entries+=("$(config_get S4D_AUTOBRR_PORT 7474):TCP:autobrr")
+    app_is_installed "maketorrent_webui" && entries+=("$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899):TCP:MakeTorrent-WebUI")
+    app_is_installed "nextcloud" && entries+=("$(config_get S4D_NEXTCLOUD_PORT 8082):TCP:Nextcloud")
+    app_is_installed "cloudreve" && entries+=("$(config_get S4D_CLOUDREVE_PORT 5212):TCP:Cloudreve")
+    app_is_installed "qui" && entries+=("$(config_get S4D_QUI_PORT 7476):TCP:Qui")
+    app_is_installed "vnc_desktop" && {
+        entries+=("$(config_get S4D_VNC_WEB_PORT 6080):TCP:VNC-Web")
+        entries+=("$(config_get S4D_VNC_PORT 5900):TCP:VNC")
+    }
+    app_is_installed "filezilla_gui" && {
+        entries+=("$(config_get S4D_FILEZILLA_WEB_PORT 5801):TCP:FileZilla-Web")
+        entries+=("$(config_get S4D_FILEZILLA_VNC_PORT 5901):TCP:FileZilla-VNC")
+    }
+    app_is_installed "jdownloader2_gui" && {
+        entries+=("$(config_get S4D_JDOWNLOADER2_WEB_PORT 5802):TCP:JDownloader2-Web")
+        entries+=("$(config_get S4D_JDOWNLOADER2_VNC_PORT 5902):TCP:JDownloader2-VNC")
+    }
+
+    if [[ ${#entries[@]} -eq 0 ]]; then
+        msg_warn "No installed app ports found to forward"
+        return 0
+    fi
+
+    echo
+    msg_info "Detected forward candidates:"
+    local i=1
+    local item
+    for item in "${entries[@]}"; do
+        IFS=':' read -r p proto name <<< "$item"
+        printf "  %2d) %-5s %-4s (%s)\n" "$i" "$p" "$proto" "$name"
+        i=$((i + 1))
+    done
+    echo
+
+    local forward_all
+    if tui_confirm "Forward all detected ports?"; then
+        forward_all=1
+    else
+        forward_all=0
+    fi
+
+    local success=0 failed=0
+    if [[ "$forward_all" -eq 1 ]]; then
+        for item in "${entries[@]}"; do
+            IFS=':' read -r p proto name <<< "$item"
+            if upnpc -a "$local_ip" "$p" "$p" "$proto" >/dev/null 2>&1; then
+                msg_ok "Forwarded ${name} on ${p}/${proto}"
+                success=$((success + 1))
+            else
+                msg_warn "Failed to forward ${name} on ${p}/${proto}"
+                failed=$((failed + 1))
+            fi
+        done
+    else
+        for item in "${entries[@]}"; do
+            IFS=':' read -r p proto name <<< "$item"
+            if tui_confirm "Forward ${name} on ${p}/${proto}?"; then
+                if upnpc -a "$local_ip" "$p" "$p" "$proto" >/dev/null 2>&1; then
+                    msg_ok "Forwarded ${name} on ${p}/${proto}"
+                    success=$((success + 1))
+                else
+                    msg_warn "Failed to forward ${name} on ${p}/${proto}"
+                    failed=$((failed + 1))
+                fi
+            fi
+        done
+    fi
+
+    echo
+    msg_info "Port forwarding completed: ${success} success, ${failed} failed"
+    msg_info "If all fail, your router may not support UPnP/NAT-PMP or it is disabled"
+    return 0
+}
+
 # ─── Network Menu ───
 network_menu() {
     while true; do
@@ -168,6 +289,7 @@ network_menu() {
             "Network Status"
             "Listening Ports"
             "VPN Status"
+            "Port Forwarding (UPnP/NAT-PMP)"
             "Install Tailscale"
             "← Back"
         )
@@ -180,7 +302,8 @@ network_menu() {
             1) clear; network_status; tui_pause ;;
             2) clear; network_ports; tui_pause ;;
             3) clear; network_vpn_status; tui_pause ;;
-            4) app_install "tailscale"; tui_pause ;;
+            4) clear; network_port_forwarding; tui_pause ;;
+            5) app_install "tailscale"; tui_pause ;;
             *) return ;;
         esac
     done

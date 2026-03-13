@@ -220,6 +220,11 @@ first_time_setup() {
         firewall_setup || true
     fi
 
+    # Optional router/NAT forwarding step
+    if tui_confirm "Configure router port forwarding now? (This exposes selected ports to the public internet)"; then
+        network_port_forwarding || true
+    fi
+
     echo
 
     # ─── Final Summary ───
