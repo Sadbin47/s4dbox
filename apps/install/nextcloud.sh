@@ -26,8 +26,7 @@ services:
     restart: unless-stopped
 EOF
 
-    s4d_write_compose_service "nextcloud" "$compose_file"
-
+    s4d_write_compose_service "nextcloud" "$compose_file" || return 1
     config_set "S4D_NEXTCLOUD_PORT" "$port"
     msg_ok "Nextcloud installed"
     msg_info "WebUI: http://$(get_local_ip):${port}"

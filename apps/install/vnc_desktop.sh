@@ -27,8 +27,7 @@ services:
     restart: unless-stopped
 EOF
 
-    s4d_write_compose_service "vnc_desktop" "$compose_file"
-
+    s4d_write_compose_service "vnc_desktop" "$compose_file" || return 1
     config_set "S4D_VNC_WEB_PORT" "$web_port"
     config_set "S4D_VNC_PORT" "$vnc_port"
     msg_ok "VNC desktop installed"

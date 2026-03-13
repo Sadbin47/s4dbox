@@ -78,7 +78,15 @@ EOF
 
     systemctl daemon-reload
     systemctl enable "s4d-${app}.service" 2>/dev/null || true
-    systemctl restart "s4d-${app}.service"
+
+    if ! systemctl restart "s4d-${app}.service"; then
+        msg_error "Failed to start s4d-${app}.service"
+        msg_info "Check: systemctl status s4d-${app}.service"
+        msg_info "Logs:  journalctl -xeu s4d-${app}.service"
+        return 1
+    fi
+
+    return 0
 }
 
 s4d_remove_compose_service() {

@@ -32,8 +32,7 @@ services:
     restart: unless-stopped
 EOF
 
-    s4d_write_compose_service "filezilla_gui" "$compose_file"
-
+    s4d_write_compose_service "filezilla_gui" "$compose_file" || return 1
     config_set "S4D_FILEZILLA_WEB_PORT" "$web_port"
     config_set "S4D_FILEZILLA_VNC_PORT" "$vnc_port"
     msg_ok "FileZilla GUI installed"

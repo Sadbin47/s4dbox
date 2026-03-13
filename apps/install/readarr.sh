@@ -36,8 +36,7 @@ services:
     restart: unless-stopped
 EOF
 
-    s4d_write_compose_service "readarr" "$compose_file"
-
+    s4d_write_compose_service "readarr" "$compose_file" || return 1
     config_set "S4D_READARR_PORT" "$port"
     msg_ok "Readarr installed"
     msg_info "WebUI: http://$(get_local_ip):${port}"

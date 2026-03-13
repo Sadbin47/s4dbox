@@ -4,7 +4,7 @@
 # First-time setup app options and ID mapping (single source of truth)
 declare -a S4D_SETUP_APP_OPTIONS=(
     "qBittorrent" "Transmission" "rTorrent" "ruTorrent" "Qui"
-    "Jellyfin" "Plex" "Sonarr V4" "Readarr" "Jellyseerr"
+    "Jellyfin" "Plex" "Sonarr V4" "Prowlarr" "Jackett" "Readarr" "Jellyseerr"
     "FileBrowser" "Nextcloud" "Cloudreve" "MakeTorrent WebUI"
     "autobrr" "autodl-irssi" "CLI Tools Bundle"
     "Tailscale" "WireGuard" "OpenVPN" "VNC Desktop"
@@ -20,6 +20,8 @@ declare -A S4D_SETUP_APP_MAP=(
     ["Jellyfin"]="jellyfin"
     ["Plex"]="plex"
     ["Sonarr V4"]="sonarr"
+    ["Prowlarr"]="prowlarr"
+    ["Jackett"]="jackett"
     ["Readarr"]="readarr"
     ["Jellyseerr"]="jellyseerr"
     ["FileBrowser"]="filebrowser"
@@ -36,6 +38,117 @@ declare -A S4D_SETUP_APP_MAP=(
     ["FileZilla GUI"]="filezilla_gui"
     ["JDownloader2 GUI"]="jdownloader2_gui"
 )
+
+s4d_setup_access_url() {
+    local app="$1"
+    local ip="$2"
+    local port ts_ip
+
+    case "$app" in
+        qbittorrent)
+            port="$(config_get S4D_QB_PORT 8080)"
+            echo "http://${ip}:${port}"
+            ;;
+        jellyfin)
+            port="$(config_get S4D_JELLYFIN_PORT 8096)"
+            echo "http://${ip}:${port}"
+            ;;
+        plex)
+            echo "http://${ip}:32400/web"
+            ;;
+        filebrowser)
+            port="$(config_get S4D_FILEBROWSER_PORT 8090)"
+            echo "http://${ip}:${port}"
+            ;;
+        rtorrent)
+            echo "SCGI only (no web UI)"
+            ;;
+        rutorrent)
+            port="$(config_get S4D_RUTORRENT_PORT 8081)"
+            echo "http://${ip}:${port}"
+            ;;
+        tailscale)
+            ts_ip="$(tailscale ip -4 2>/dev/null || echo 'N/A')"
+            echo "Tailscale IP: ${ts_ip}"
+            ;;
+        wireguard)
+            echo "wg-quick@wg0"
+            ;;
+        openvpn)
+            echo "openvpn-server@server"
+            ;;
+        transmission)
+            port="$(config_get S4D_TRANSMISSION_PORT 9091)"
+            echo "http://${ip}:${port}/web"
+            ;;
+        autodl_irssi)
+            echo "irssi plugin"
+            ;;
+        maketorrent_webui)
+            port="$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899)"
+            echo "http://${ip}:${port}"
+            ;;
+        sonarr)
+            port="$(config_get S4D_SONARR_PORT 8989)"
+            echo "http://${ip}:${port}"
+            ;;
+        prowlarr)
+            port="$(config_get S4D_PROWLARR_PORT 9696)"
+            echo "http://${ip}:${port}"
+            ;;
+        jackett)
+            port="$(config_get S4D_JACKETT_PORT 9117)"
+            echo "http://${ip}:${port}"
+            ;;
+        readarr)
+            port="$(config_get S4D_READARR_PORT 8787)"
+            echo "http://${ip}:${port}"
+            ;;
+        jellyseerr)
+            port="$(config_get S4D_JELLYSEERR_PORT 5055)"
+            echo "http://${ip}:${port}"
+            ;;
+        autobrr)
+            port="$(config_get S4D_AUTOBRR_PORT 7474)"
+            echo "http://${ip}:${port}"
+            ;;
+        vnc_desktop)
+            port="$(config_get S4D_VNC_WEB_PORT 6080)"
+            echo "http://${ip}:${port}"
+            ;;
+        filezilla_gui)
+            port="$(config_get S4D_FILEZILLA_WEB_PORT 5801)"
+            echo "http://${ip}:${port}"
+            ;;
+        jdownloader2_gui)
+            port="$(config_get S4D_JDOWNLOADER2_WEB_PORT 5802)"
+            echo "http://${ip}:${port}"
+            ;;
+        nextcloud)
+            port="$(config_get S4D_NEXTCLOUD_PORT 8082)"
+            echo "http://${ip}:${port}"
+            ;;
+        cloudreve)
+            port="$(config_get S4D_CLOUDREVE_PORT 5212)"
+            echo "http://${ip}:${port}"
+            ;;
+        qui)
+            port="$(config_get S4D_QUI_PORT 7476)"
+            echo "http://${ip}:${port}"
+            ;;
+        ssh_tools)
+            echo "CLI tools installed"
+            ;;
+        *)
+            echo "N/A"
+            ;;
+    esac
+}
+
+s4d_setup_print_cred_line() {
+    local text="$1"
+    printf "  ${BOLD}${YELLOW}│${RESET}  %-54.54s${BOLD}${YELLOW}│${RESET}\n" "$text"
+}
 
 # ─── First-Time Setup ───
 first_time_setup() {
@@ -143,107 +256,17 @@ first_time_setup() {
         printf "  ${BOLD}${GREEN}├──────────────────┼────────────┼────────────────────────┤${RESET}\n"
 
         while IFS= read -r app; do
-            local status port url status_color
+            local status url status_color
             status="$(app_status "$app")"
 
             if [[ "$status" == "running" ]]; then
                 status_color="${GREEN}"
+            elif [[ "$status" == "configured" ]]; then
+                status_color="${YELLOW}"
             else
                 status_color="${RED}"
             fi
-
-            case "$app" in
-                qbittorrent)
-                    port="$(config_get S4D_QB_PORT 8080)"
-                    url="http://${ip}:${port}"
-                    ;;
-                jellyfin)
-                    port="$(config_get S4D_JELLYFIN_PORT 8096)"
-                    url="http://${ip}:${port}"
-                    ;;
-                plex)
-                    url="http://${ip}:32400/web"
-                    ;;
-                filebrowser)
-                    port="$(config_get S4D_FILEBROWSER_PORT 8090)"
-                    url="http://${ip}:${port}"
-                    ;;
-                rtorrent)
-                    url="(SCGI - no web UI)"
-                    ;;
-                rutorrent)
-                    port="$(config_get S4D_RUTORRENT_PORT 8081)"
-                    url="http://${ip}:${port}"
-                    ;;
-                tailscale)
-                    local ts_ip
-                    ts_ip="$(tailscale ip -4 2>/dev/null || echo 'N/A')"
-                    url="IP: ${ts_ip}"
-                    ;;
-                wireguard)
-                    url="wg-quick@wg0"
-                    ;;
-                openvpn)
-                    url="openvpn-server@server"
-                    ;;
-                transmission)
-                    port="$(config_get S4D_TRANSMISSION_PORT 9091)"
-                    url="http://${ip}:${port}/web"
-                    ;;
-                autodl_irssi)
-                    url="irssi plugin"
-                    ;;
-                maketorrent_webui)
-                    port="$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899)"
-                    url="http://${ip}:${port}"
-                    ;;
-                sonarr)
-                    port="$(config_get S4D_SONARR_PORT 8989)"
-                    url="http://${ip}:${port}"
-                    ;;
-                readarr)
-                    port="$(config_get S4D_READARR_PORT 8787)"
-                    url="http://${ip}:${port}"
-                    ;;
-                jellyseerr)
-                    port="$(config_get S4D_JELLYSEERR_PORT 5055)"
-                    url="http://${ip}:${port}"
-                    ;;
-                autobrr)
-                    port="$(config_get S4D_AUTOBRR_PORT 7474)"
-                    url="http://${ip}:${port}"
-                    ;;
-                vnc_desktop)
-                    port="$(config_get S4D_VNC_WEB_PORT 6080)"
-                    url="http://${ip}:${port}"
-                    ;;
-                filezilla_gui)
-                    port="$(config_get S4D_FILEZILLA_WEB_PORT 5801)"
-                    url="http://${ip}:${port}"
-                    ;;
-                jdownloader2_gui)
-                    port="$(config_get S4D_JDOWNLOADER2_WEB_PORT 5802)"
-                    url="http://${ip}:${port}"
-                    ;;
-                nextcloud)
-                    port="$(config_get S4D_NEXTCLOUD_PORT 8082)"
-                    url="http://${ip}:${port}"
-                    ;;
-                cloudreve)
-                    port="$(config_get S4D_CLOUDREVE_PORT 5212)"
-                    url="http://${ip}:${port}"
-                    ;;
-                qui)
-                    port="$(config_get S4D_QUI_PORT 7476)"
-                    url="http://${ip}:${port}"
-                    ;;
-                ssh_tools)
-                    url="CLI tools installed"
-                    ;;
-                *)
-                    url="N/A"
-                    ;;
-            esac
+            url="$(s4d_setup_access_url "$app" "$ip")"
 
             printf "  ${BOLD}${GREEN}│${RESET} %-16s ${BOLD}${GREEN}│${RESET} ${status_color}%-10s${RESET} ${BOLD}${GREEN}│${RESET} %-22s ${BOLD}${GREEN}│${RESET}\n" "$app" "$status" "$url"
         done <<< "$installed_apps"
@@ -253,54 +276,124 @@ first_time_setup() {
 
     echo
 
+    if [[ -n "$installed_apps" ]]; then
+        local needs_action=0
+        while IFS= read -r app; do
+            local status
+            status="$(app_status "$app")"
+            [[ "$status" == "stopped" || "$status" == "configured" ]] && needs_action=1
+        done <<< "$installed_apps"
+
+        if [[ $needs_action -eq 1 ]]; then
+            printf "  ${BOLD}${MAGENTA}Action Required${RESET}\n"
+            while IFS= read -r app; do
+                local status
+                status="$(app_status "$app")"
+
+                case "$status" in
+                    stopped)
+                        if tui_confirm "${app} is installed but stopped. Start it now?"; then
+                            if app_restart "$app"; then
+                                msg_ok "${app} started"
+                            else
+                                msg_warn "Could not start ${app}. Check: systemctl status"
+                            fi
+                        fi
+                        ;;
+                    configured)
+                        case "$app" in
+                            wireguard)
+                                msg_warn "wireguard needs /etc/wireguard/wg0.conf"
+                                if tui_confirm "Try starting WireGuard now anyway?"; then
+                                    app_restart "$app" || msg_warn "WireGuard start failed (likely missing config)"
+                                fi
+                                ;;
+                            openvpn)
+                                msg_warn "openvpn needs /etc/openvpn/server/server.conf"
+                                if tui_confirm "Try starting OpenVPN now anyway?"; then
+                                    app_restart "$app" || msg_warn "OpenVPN start failed (likely missing config)"
+                                fi
+                                ;;
+                            autodl_irssi)
+                                msg_info "autodl-irssi is a plugin and does not run as a service"
+                                ;;
+                            ssh_tools)
+                                msg_info "CLI tools bundle installed (no long-running service)"
+                                ;;
+                        esac
+                        ;;
+                esac
+            done <<< "$installed_apps"
+        fi
+    fi
+
+    echo
+
     # Credentials
     printf "  ${BOLD}${YELLOW}┌────────────────────────────────────────────────────────┐${RESET}\n"
     printf "  ${BOLD}${YELLOW}│${RESET}  ${BOLD}Credentials & Access${RESET}                                ${BOLD}${YELLOW}│${RESET}\n"
     printf "  ${BOLD}${YELLOW}├────────────────────────────────────────────────────────┤${RESET}\n"
-    printf "  ${BOLD}${YELLOW}│${RESET}  ${BOLD}Seedbox User:${RESET} %-40s${BOLD}${YELLOW}│${RESET}\n" "$username"
-    printf "  ${BOLD}${YELLOW}│${RESET}  ${BOLD}Password:${RESET}     %-40s${BOLD}${YELLOW}│${RESET}\n" "(the password you set during user creation)"
-    printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
+    s4d_setup_print_cred_line "Seedbox User: ${username}"
+    s4d_setup_print_cred_line "Password: (you set this during user creation)"
+    s4d_setup_print_cred_line ""
 
-    if app_is_installed "qbittorrent"; then
-        local qb_port
-        qb_port="$(config_get S4D_QB_PORT 8080)"
-        printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}qBittorrent${RESET}                                          ${BOLD}${YELLOW}│${RESET}\n"
-        printf "  ${BOLD}${YELLOW}│${RESET}    URL:  ${BOLD}http://${ip}:${qb_port}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((35 - ${#ip} - ${#qb_port}))" ""
-        printf "  ${BOLD}${YELLOW}│${RESET}    User: ${BOLD}${username}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((45 - ${#username}))" ""
-        printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
-    fi
+    if [[ -n "$installed_apps" ]]; then
+        while IFS= read -r app; do
+            local label url hint tx_user
+            label="${S4D_APP_DESC[$app]:-$app}"
+            label="${label%% - *}"
+            url="$(s4d_setup_access_url "$app" "$ip")"
+            s4d_setup_print_cred_line "${label}: ${url}"
 
-    if app_is_installed "jellyfin"; then
-        local jf_port
-        jf_port="$(config_get S4D_JELLYFIN_PORT 8096)"
-        printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}Jellyfin${RESET}                                             ${BOLD}${YELLOW}│${RESET}\n"
-        printf "  ${BOLD}${YELLOW}│${RESET}    URL:  ${BOLD}http://${ip}:${jf_port}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((35 - ${#ip} - ${#jf_port}))" ""
-        printf "  ${BOLD}${YELLOW}│${RESET}    (Complete setup via web wizard on first visit)       ${BOLD}${YELLOW}│${RESET}\n"
-        printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
-    fi
+            case "$app" in
+                qbittorrent)
+                    hint="User: ${username} | Pass: set during qB install"
+                    ;;
+                transmission)
+                    tx_user="$(config_get S4D_TRANSMISSION_USER "$username")"
+                    hint="User: ${tx_user} | Pass: set during Transmission install"
+                    ;;
+                rutorrent)
+                    hint="User: ${username} | Pass: set during ruTorrent install"
+                    ;;
+                filebrowser)
+                    hint="User: ${username} | Pass: set during FileBrowser install"
+                    ;;
+                jellyfin|plex|nextcloud|cloudreve|jellyseerr)
+                    hint="Finish web setup wizard on first visit"
+                    ;;
+                sonarr|prowlarr|jackett|readarr|autobrr|qui)
+                    hint="Configure app from the web UI"
+                    ;;
+                wireguard)
+                    hint="Needs /etc/wireguard/wg0.conf before start"
+                    ;;
+                openvpn)
+                    hint="Needs /etc/openvpn/server/server.conf before start"
+                    ;;
+                tailscale)
+                    hint="Run: tailscale up (if not already connected)"
+                    ;;
+                autodl_irssi)
+                    hint="Plugin for irssi/rTorrent; no standalone login"
+                    ;;
+                ssh_tools)
+                    hint="CLI tools only; no web login"
+                    ;;
+                maketorrent_webui|vnc_desktop|filezilla_gui|jdownloader2_gui)
+                    hint="Open URL and complete in-app setup"
+                    ;;
+                rtorrent)
+                    hint="Managed via rTorrent session; pair with ruTorrent"
+                    ;;
+                *)
+                    hint="See app documentation for auth/setup"
+                    ;;
+            esac
 
-    if app_is_installed "plex"; then
-        printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}Plex${RESET}                                                 ${BOLD}${YELLOW}│${RESET}\n"
-        printf "  ${BOLD}${YELLOW}│${RESET}    URL:  ${BOLD}http://${ip}:32400/web${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((25 - ${#ip}))" ""
-        printf "  ${BOLD}${YELLOW}│${RESET}    (Login with your Plex account)                      ${BOLD}${YELLOW}│${RESET}\n"
-        printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
-    fi
-
-    if app_is_installed "filebrowser"; then
-        local fb_port
-        fb_port="$(config_get S4D_FILEBROWSER_PORT 8090)"
-        printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}FileBrowser${RESET}                                          ${BOLD}${YELLOW}│${RESET}\n"
-        printf "  ${BOLD}${YELLOW}│${RESET}    URL:  ${BOLD}http://${ip}:${fb_port}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((35 - ${#ip} - ${#fb_port}))" ""
-        printf "  ${BOLD}${YELLOW}│${RESET}    User: ${BOLD}${username}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((45 - ${#username}))" ""
-        printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
-    fi
-
-    if app_is_installed "tailscale"; then
-        local ts_ip
-        ts_ip="$(tailscale ip -4 2>/dev/null || echo 'not connected')"
-        printf "  ${BOLD}${YELLOW}│${RESET}  ${CYAN}Tailscale${RESET}                                            ${BOLD}${YELLOW}│${RESET}\n"
-        printf "  ${BOLD}${YELLOW}│${RESET}    Tailscale IP: ${BOLD}${ts_ip}${RESET}%-*s${BOLD}${YELLOW}│${RESET}\n" "$((37 - ${#ts_ip}))" ""
-        printf "  ${BOLD}${YELLOW}│${RESET}                                                        ${BOLD}${YELLOW}│${RESET}\n"
+            s4d_setup_print_cred_line "${hint}"
+            s4d_setup_print_cred_line ""
+        done <<< "$installed_apps"
     fi
 
     printf "  ${BOLD}${YELLOW}└────────────────────────────────────────────────────────┘${RESET}\n"

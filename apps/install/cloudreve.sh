@@ -28,8 +28,7 @@ services:
     restart: unless-stopped
 EOF
 
-    s4d_write_compose_service "cloudreve" "$compose_file"
-
+    s4d_write_compose_service "cloudreve" "$compose_file" || return 1
     config_set "S4D_CLOUDREVE_PORT" "$port"
     msg_ok "Cloudreve installed"
     msg_info "WebUI: http://$(get_local_ip):${port}"

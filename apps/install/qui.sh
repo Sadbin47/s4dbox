@@ -26,8 +26,7 @@ services:
     restart: unless-stopped
 EOF
 
-    s4d_write_compose_service "qui" "$compose_file"
-
+    s4d_write_compose_service "qui" "$compose_file" || return 1
     config_set "S4D_QUI_PORT" "$port"
     msg_ok "Qui installed"
     msg_info "WebUI: http://$(get_local_ip):${port}"

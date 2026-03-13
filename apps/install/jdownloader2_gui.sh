@@ -32,8 +32,7 @@ services:
     restart: unless-stopped
 EOF
 
-    s4d_write_compose_service "jdownloader2_gui" "$compose_file"
-
+    s4d_write_compose_service "jdownloader2_gui" "$compose_file" || return 1
     config_set "S4D_JDOWNLOADER2_WEB_PORT" "$web_port"
     config_set "S4D_JDOWNLOADER2_VNC_PORT" "$vnc_port"
     msg_ok "JDownloader2 GUI installed"

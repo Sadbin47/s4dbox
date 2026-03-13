@@ -31,8 +31,7 @@ services:
     restart: unless-stopped
 EOF
 
-    s4d_write_compose_service "autobrr" "$compose_file"
-
+    s4d_write_compose_service "autobrr" "$compose_file" || return 1
     config_set "S4D_AUTOBRR_PORT" "$port"
     msg_ok "autobrr installed"
     msg_info "WebUI: http://$(get_local_ip):${port}"

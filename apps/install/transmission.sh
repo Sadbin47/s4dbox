@@ -58,6 +58,7 @@ install_transmission() {
     systemctl restart "$service_name" 2>/dev/null || true
 
     config_set "S4D_TRANSMISSION_PORT" "$rpc_port"
+    config_set "S4D_TRANSMISSION_USER" "$rpc_user"
 
     msg_ok "Transmission installed"
     msg_info "WebUI: http://$(get_local_ip):${rpc_port}/web"

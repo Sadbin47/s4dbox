@@ -19,6 +19,8 @@ Implementation path: `apps/install/*.sh` and `apps/remove/*.sh`
 - `jellyfin`
 - `plex`
 - `sonarr`
+- `prowlarr`
+- `jackett`
 - `readarr`
 - `jellyseerr`
 

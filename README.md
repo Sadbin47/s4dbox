@@ -75,6 +75,8 @@ sudo s4dbox help         # Show help
 | **Jellyfin** | Open-source media server |
 | **Plex** | Media server |
 | **Sonarr V4** | TV series automation |
+| **Prowlarr** | Indexer manager |
+| **Jackett** | Indexer proxy and tracker integration |
 | **Readarr** | Book/audiobook automation |
 | **Jellyseerr** | Media request management |
 | **autobrr** | Indexer automation and filtering |

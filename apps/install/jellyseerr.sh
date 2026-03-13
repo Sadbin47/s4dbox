@@ -28,8 +28,7 @@ services:
     restart: unless-stopped
 EOF
 
-    s4d_write_compose_service "jellyseerr" "$compose_file"
-
+    s4d_write_compose_service "jellyseerr" "$compose_file" || return 1
     config_set "S4D_JELLYSEERR_PORT" "$port"
     msg_ok "Jellyseerr installed"
     msg_info "WebUI: http://$(get_local_ip):${port}"
