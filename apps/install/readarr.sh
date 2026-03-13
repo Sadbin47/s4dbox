@@ -21,7 +21,7 @@ install_readarr() {
     cat > "$compose_file" <<EOF
 services:
   readarr:
-    image: lscr.io/linuxserver/readarr:latest
+    image: lscr.io/linuxserver/readarr:develop
     container_name: s4d-readarr
     environment:
       - PUID=${uid}

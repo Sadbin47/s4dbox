@@ -79,6 +79,13 @@ app_install() {
         app_mark_installed "$app"
         msg_ok "${app} installed successfully"
         log_info "Installation complete: $app"
+
+        # If firewall is already active, refresh rules so newly installed app ports are reachable.
+        if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -qi '^Status: active'; then
+            firewall_setup >/dev/null 2>&1 || true
+        elif command -v firewall-cmd &>/dev/null && firewall-cmd --state &>/dev/null; then
+            firewall_setup >/dev/null 2>&1 || true
+        fi
         
         # Install nginx config if nginx is enabled
         if [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]]; then
