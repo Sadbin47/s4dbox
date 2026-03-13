@@ -203,9 +203,7 @@ first_time_setup() {
     if tui_confirm "Setup Nginx reverse proxy?"; then
         nginx_install || true
         nginx_create_main_server || true
-        for app in qbittorrent jellyfin plex filebrowser; do
-            app_is_installed "$app" && "nginx_${app}" 2>/dev/null || true
-        done
+        nginx_setup_all_installed_proxies || true
     fi
 
     # Security

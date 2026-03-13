@@ -189,6 +189,119 @@ nginx_filebrowser() {
     msg_ok "Nginx proxy configured for FileBrowser"
 }
 
+nginx_transmission() {
+    local port
+    port="$(config_get S4D_TRANSMISSION_PORT 9091)"
+    nginx_create_proxy "transmission" "$port" "/transmission"
+    msg_ok "Nginx proxy configured for Transmission"
+}
+
+nginx_rutorrent() {
+    local port
+    port="$(config_get S4D_RUTORRENT_PORT 8081)"
+    nginx_create_proxy "rutorrent" "$port" "/rutorrent"
+    msg_ok "Nginx proxy configured for ruTorrent"
+}
+
+nginx_sonarr() {
+    local port
+    port="$(config_get S4D_SONARR_PORT 8989)"
+    nginx_create_proxy "sonarr" "$port" "/sonarr"
+    msg_ok "Nginx proxy configured for Sonarr"
+}
+
+nginx_prowlarr() {
+    local port
+    port="$(config_get S4D_PROWLARR_PORT 9696)"
+    nginx_create_proxy "prowlarr" "$port" "/prowlarr"
+    msg_ok "Nginx proxy configured for Prowlarr"
+}
+
+nginx_jackett() {
+    local port
+    port="$(config_get S4D_JACKETT_PORT 9117)"
+    nginx_create_proxy "jackett" "$port" "/jackett"
+    msg_ok "Nginx proxy configured for Jackett"
+}
+
+nginx_jellyseerr() {
+    local port
+    port="$(config_get S4D_JELLYSEERR_PORT 5055)"
+    nginx_create_proxy "jellyseerr" "$port" "/jellyseerr"
+    msg_ok "Nginx proxy configured for Jellyseerr"
+}
+
+nginx_autobrr() {
+    local port
+    port="$(config_get S4D_AUTOBRR_PORT 7474)"
+    nginx_create_proxy "autobrr" "$port" "/autobrr"
+    msg_ok "Nginx proxy configured for autobrr"
+}
+
+nginx_maketorrent_webui() {
+    local port
+    port="$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899)"
+    nginx_create_proxy "maketorrent_webui" "$port" "/maketorrent"
+    msg_ok "Nginx proxy configured for MakeTorrent WebUI"
+}
+
+nginx_nextcloud() {
+    local port
+    port="$(config_get S4D_NEXTCLOUD_PORT 8082)"
+    nginx_create_proxy "nextcloud" "$port" "/nextcloud"
+    msg_ok "Nginx proxy configured for Nextcloud"
+}
+
+nginx_cloudreve() {
+    local port
+    port="$(config_get S4D_CLOUDREVE_PORT 5212)"
+    nginx_create_proxy "cloudreve" "$port" "/cloudreve"
+    msg_ok "Nginx proxy configured for Cloudreve"
+}
+
+nginx_qui() {
+    local port
+    port="$(config_get S4D_QUI_PORT 7476)"
+    nginx_create_proxy "qui" "$port" "/qui"
+    msg_ok "Nginx proxy configured for Qui"
+}
+
+nginx_vnc_desktop() {
+    local port
+    port="$(config_get S4D_VNC_WEB_PORT 6080)"
+    nginx_create_proxy "vnc_desktop" "$port" "/vnc"
+    msg_ok "Nginx proxy configured for VNC Desktop"
+}
+
+nginx_filezilla_gui() {
+    local port
+    port="$(config_get S4D_FILEZILLA_WEB_PORT 5801)"
+    nginx_create_proxy "filezilla_gui" "$port" "/filezilla"
+    msg_ok "Nginx proxy configured for FileZilla GUI"
+}
+
+nginx_jdownloader2_gui() {
+    local port
+    port="$(config_get S4D_JDOWNLOADER2_WEB_PORT 5802)"
+    nginx_create_proxy "jdownloader2_gui" "$port" "/jdownloader"
+    msg_ok "Nginx proxy configured for JDownloader2 GUI"
+}
+
+nginx_setup_all_installed_proxies() {
+    local app
+    local proxy_apps=(
+        qbittorrent transmission rutorrent jellyfin plex filebrowser
+        sonarr prowlarr jackett jellyseerr autobrr maketorrent_webui
+        nextcloud cloudreve qui vnc_desktop filezilla_gui jdownloader2_gui
+    )
+
+    for app in "${proxy_apps[@]}"; do
+        if app_is_installed "$app" && declare -F "nginx_${app}" >/dev/null; then
+            "nginx_${app}" 2>/dev/null || true
+        fi
+    done
+}
+
 # ─── Nginx Menu ───
 nginx_menu() {
     while true; do
@@ -221,11 +334,7 @@ nginx_menu() {
                 ;;
             2)
                 msg_step "Setting up proxies for installed apps"
-                for app in qbittorrent jellyfin plex filebrowser; do
-                    if app_is_installed "$app"; then
-                        "nginx_${app}" 2>/dev/null || true
-                    fi
-                done
+                nginx_setup_all_installed_proxies
                 msg_ok "All proxies configured"
                 tui_pause
                 ;;

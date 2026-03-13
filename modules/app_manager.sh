@@ -51,6 +51,61 @@ app_list_available() {
     done | sort
 }
 
+app_docker_container_name() {
+    local app="$1"
+    case "$app" in
+        sonarr) echo "s4d-sonarr" ;;
+        prowlarr) echo "s4d-prowlarr" ;;
+        jackett) echo "s4d-jackett" ;;
+        jellyseerr) echo "s4d-jellyseerr" ;;
+        autobrr) echo "s4d-autobrr" ;;
+        nextcloud) echo "s4d-nextcloud" ;;
+        cloudreve) echo "s4d-cloudreve" ;;
+        qui) echo "s4d-qui" ;;
+        vnc_desktop) echo "s4d-vnc-desktop" ;;
+        filezilla_gui) echo "s4d-filezilla" ;;
+        jdownloader2_gui) echo "s4d-jdownloader2" ;;
+        *) echo "" ;;
+    esac
+}
+
+app_get_web_port() {
+    local app="$1"
+    case "$app" in
+        qbittorrent) echo "$(config_get S4D_QB_PORT 8080)" ;;
+        transmission) echo "$(config_get S4D_TRANSMISSION_PORT 9091)" ;;
+        rutorrent) echo "$(config_get S4D_RUTORRENT_PORT 8081)" ;;
+        jellyfin) echo "$(config_get S4D_JELLYFIN_PORT 8096)" ;;
+        plex) echo "32400" ;;
+        filebrowser) echo "$(config_get S4D_FILEBROWSER_PORT 8090)" ;;
+        sonarr) echo "$(config_get S4D_SONARR_PORT 8989)" ;;
+        prowlarr) echo "$(config_get S4D_PROWLARR_PORT 9696)" ;;
+        jackett) echo "$(config_get S4D_JACKETT_PORT 9117)" ;;
+        jellyseerr) echo "$(config_get S4D_JELLYSEERR_PORT 5055)" ;;
+        autobrr) echo "$(config_get S4D_AUTOBRR_PORT 7474)" ;;
+        maketorrent_webui) echo "$(config_get S4D_MAKETORRENT_WEBUI_PORT 8899)" ;;
+        nextcloud) echo "$(config_get S4D_NEXTCLOUD_PORT 8082)" ;;
+        cloudreve) echo "$(config_get S4D_CLOUDREVE_PORT 5212)" ;;
+        qui) echo "$(config_get S4D_QUI_PORT 7476)" ;;
+        vnc_desktop) echo "$(config_get S4D_VNC_WEB_PORT 6080)" ;;
+        filezilla_gui) echo "$(config_get S4D_FILEZILLA_WEB_PORT 5801)" ;;
+        jdownloader2_gui) echo "$(config_get S4D_JDOWNLOADER2_WEB_PORT 5802)" ;;
+        *) echo "" ;;
+    esac
+}
+
+app_webui_reachable() {
+    local app="$1"
+    local port url code
+
+    port="$(app_get_web_port "$app")"
+    [[ -z "$port" ]] && return 2
+
+    url="http://127.0.0.1:${port}/"
+    code="$(curl -sS -m 6 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo 000)"
+    [[ "$code" != "000" ]]
+}
+
 # Install an app
 app_install() {
     local app="$1"
@@ -88,10 +143,22 @@ app_install() {
         
         # Install nginx config if nginx is enabled
         if [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]]; then
-            local nginx_script="${S4D_APPS_DIR}/nginx/${app}.sh"
-            if [[ -f "$nginx_script" ]]; then
-                source "$nginx_script"
+            if declare -F "nginx_${app}" >/dev/null; then
                 "nginx_${app}" 2>/dev/null || true
+            fi
+        fi
+
+        # Verify local WebUI reachability for web apps to avoid false "installed" states.
+        if app_webui_reachable "$app"; then
+            local _web_port
+            _web_port="$(app_get_web_port "$app")"
+            [[ -n "$_web_port" ]] && msg_ok "${app} WebUI reachable on localhost:${_web_port}"
+        else
+            if [[ $? -ne 2 ]]; then
+                local _web_port
+                _web_port="$(app_get_web_port "$app")"
+                [[ -n "$_web_port" ]] && msg_warn "${app} installed but WebUI is not reachable on localhost:${_web_port}"
+                msg_info "Try: systemctl status, docker ps, and app restart from Application Manager"
             fi
         fi
         return 0
@@ -225,11 +292,24 @@ app_status() {
         *)           service_name="$app" ;;
     esac
 
-    if systemctl is-active "$service_name" &>/dev/null; then
-        echo "running"
-    else
+    if ! systemctl is-active "$service_name" &>/dev/null; then
         echo "stopped"
+        return
     fi
+
+    # Docker-backed apps need container health validation, not only systemd oneshot status.
+    local container_name
+    container_name="$(app_docker_container_name "$app")"
+    if [[ -n "$container_name" ]]; then
+        if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -Fxq "$container_name"; then
+            echo "running"
+        else
+            echo "stopped"
+        fi
+        return
+    fi
+
+    echo "running"
 }
 
 # Restart app service
