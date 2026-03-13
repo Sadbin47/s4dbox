@@ -8,8 +8,8 @@ This document explains how the s4dbox project is structured and how to add new f
 - `install.sh`: one-click installer for local or remote installation.
 - `lib/`: shared libraries (colors, logging, system detection, config, users).
 - `modules/`: runtime feature modules used by the TUI.
-- `apps/install/`: legacy entrypoint shims and categorized install handlers.
-- `apps/remove/`: legacy entrypoint shims and categorized remove handlers.
+- `apps/install/`: one installer script per app plus shared helper scripts.
+- `apps/remove/`: one remover script per app.
 - `apps/nginx/`: optional per-app nginx proxy snippets.
 - `docs/`: project documentation.
 
@@ -17,23 +17,12 @@ This document explains how the s4dbox project is structured and how to add new f
 
 Each app should follow this contract:
 
-1. Implement app installer in `apps/install/<category>/<app>.sh` with `install_<app>()`.
-2. Implement app remover in `apps/remove/<category>/<app>.sh` with `remove_<app>()`.
-3. Keep compatibility shims at `apps/install/<app>.sh` and `apps/remove/<app>.sh`.
+1. Implement app installer in `apps/install/<app>.sh` with `install_<app>()`.
+2. Implement app remover in `apps/remove/<app>.sh` with `remove_<app>()`.
 4. Register app label in `modules/app_manager.sh` (`S4D_APP_DESC`).
 5. Optionally add app to first-time setup options in `modules/setup_wizard.sh`.
 6. Persist ports/settings using `config_set`.
 7. Report status by adding the app case to `app_status` if needed.
-
-## Install/Remove Categories
-
-- `torrent/`: torrent clients and torrent web UIs.
-- `media/`: media servers and arr-stack applications.
-- `file/`: file management and cloud storage apps.
-- `automation/`: automation and CLI tool bundles.
-- `network/`: VPN and network access tools.
-- `remote/`: remote desktop and GUI-over-web tools.
-- `shared/`: shared helper libraries (install side).
 
 ## Naming Rules
 
@@ -48,6 +37,5 @@ Each app should follow this contract:
 - Keep existing app install/remove behavior unchanged.
 - Prefer additive changes over rewrites.
 - Keep per-app scripts isolated from each other.
-- Keep legacy shim paths valid to avoid breaking existing integrations.
 - If an app can break host dependencies, prefer Docker deployment.
 - Always validate syntax (`bash -n`) after edits.

@@ -1,3 +1,11 @@
 #!/usr/bin/env bash
-# Compatibility shim: keep legacy path working
-source "${S4D_BASE_DIR}/apps/remove/network/openvpn.sh"
+# s4dbox - OpenVPN removal
+
+remove_openvpn() {
+    msg_step "Removing OpenVPN"
+    systemctl stop openvpn-server@server 2>/dev/null || true
+    systemctl disable openvpn-server@server 2>/dev/null || true
+    pkg_remove openvpn 2>/dev/null || true
+    msg_ok "OpenVPN removed"
+    return 0
+}

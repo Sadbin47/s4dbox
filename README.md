@@ -129,21 +129,8 @@ s4dbox/
 │   ├── tui.sh          #   Terminal UI framework
 │   └── tune.sh         #   System tuning
 └── apps/               # Per-app scripts
-    ├── install/        #   Compatibility shims + categorized installers
-    │   ├── torrent/
-    │   ├── media/
-    │   ├── file/
-    │   ├── automation/
-    │   ├── network/
-    │   ├── remote/
-    │   └── shared/
-    ├── remove/         #   Compatibility shims + categorized removers
-    │   ├── torrent/
-    │   ├── media/
-    │   ├── file/
-    │   ├── automation/
-    │   ├── network/
-    │   └── remote/
+    ├── install/        #   One installer script per app + shared helpers
+    ├── remove/         #   One remover script per app
     ├── nginx/          #   Nginx configs
     └── configs/        #   App configs
 ```

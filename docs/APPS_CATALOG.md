@@ -4,7 +4,7 @@ Applications are grouped by function for easier navigation.
 
 ## Torrent Clients
 
-Implementation path: `apps/install/torrent/` and `apps/remove/torrent/`
+Implementation path: `apps/install/*.sh` and `apps/remove/*.sh`
 
 - `qbittorrent`
 - `transmission`
@@ -14,7 +14,7 @@ Implementation path: `apps/install/torrent/` and `apps/remove/torrent/`
 
 ## Media and Automation
 
-Implementation path: `apps/install/media/` and `apps/remove/media/`
+Implementation path: `apps/install/*.sh` and `apps/remove/*.sh`
 
 - `jellyfin`
 - `plex`
@@ -24,7 +24,7 @@ Implementation path: `apps/install/media/` and `apps/remove/media/`
 
 ## File and Cloud
 
-Implementation path: `apps/install/file/` and `apps/remove/file/`
+Implementation path: `apps/install/*.sh` and `apps/remove/*.sh`
 
 - `filebrowser`
 - `nextcloud`
@@ -33,7 +33,7 @@ Implementation path: `apps/install/file/` and `apps/remove/file/`
 
 ## Automation and Tools
 
-Implementation path: `apps/install/automation/` and `apps/remove/automation/`
+Implementation path: `apps/install/*.sh` and `apps/remove/*.sh`
 
 - `autobrr`
 - `autodl_irssi`
@@ -41,10 +41,7 @@ Implementation path: `apps/install/automation/` and `apps/remove/automation/`
 
 ## Network and Remote Access
 
-Implementation paths:
-
-- Network apps: `apps/install/network/` and `apps/remove/network/`
-- Remote apps: `apps/install/remote/` and `apps/remove/remote/`
+Implementation path: `apps/install/*.sh` and `apps/remove/*.sh`
 
 - `tailscale`
 - `wireguard`
@@ -56,6 +53,5 @@ Implementation paths:
 ## Notes
 
 - Docker-based apps use `apps/install/docker_helpers.sh`.
-- Legacy paths in `apps/install/*.sh` and `apps/remove/*.sh` are compatibility shims.
 - Native apps rely on distro package managers through `pkg_install`.
 - App state is tracked in `/etc/s4dbox/installed_apps/`.

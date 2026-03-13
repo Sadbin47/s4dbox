@@ -1,3 +1,12 @@
 #!/usr/bin/env bash
-# Compatibility shim: keep legacy path working
-source "${S4D_BASE_DIR}/apps/remove/file/maketorrent_webui.sh"
+# s4dbox - MakeTorrent WebUI removal
+
+remove_maketorrent_webui() {
+    msg_step "Removing MakeTorrent WebUI"
+    systemctl stop maketorrent-webui 2>/dev/null || true
+    systemctl disable maketorrent-webui 2>/dev/null || true
+    rm -f /etc/systemd/system/maketorrent-webui.service
+    systemctl daemon-reload
+    msg_ok "MakeTorrent WebUI removed"
+    return 0
+}
