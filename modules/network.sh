@@ -194,6 +194,59 @@ network_add_forward_entry() {
     _entries_ref+=("${port}:${proto}:${name}")
 }
 
+network_forward_port() {
+    local backend="$1"
+    local local_ip="$2"
+    local port="$3"
+    local proto="$4"
+    local output rc
+
+    NETWORK_FORWARD_LAST_ERROR=""
+
+    case "$backend" in
+        upnp)
+            output="$(upnpc -a "$local_ip" "$port" "$port" "$proto" 2>&1)"
+            rc=$?
+            ;;
+        natpmp)
+            output="$(natpmpc -a "$port" "$port" "${proto,,}" 3600 2>&1)"
+            rc=$?
+            ;;
+        *)
+            NETWORK_FORWARD_LAST_ERROR="Unknown forwarding backend: ${backend}"
+            return 1
+            ;;
+    esac
+
+    NETWORK_FORWARD_LAST_ERROR="$(echo "$output" | head -1)"
+    [[ $rc -eq 0 ]] || return 1
+
+    if echo "$output" | grep -qiE 'failed|error|refused|unsupported|denied|no gateway|not found'; then
+        return 1
+    fi
+
+    return 0
+}
+
+network_print_manual_forward_table() {
+    local local_ip="$1"
+    local -n _entries_ref=$2
+    local item port proto name
+
+    [[ ${#_entries_ref[@]} -gt 0 ]] || return 0
+
+    echo
+    msg_warn "Manual router forwarding is required"
+    msg_info "Add these rules in your router (WAN -> ${local_ip}):"
+    printf "  %-7s %-7s %-4s %s\n" "WAN" "LAN" "Proto" "Service"
+    printf "  %-7s %-7s %-4s %s\n" "-------" "-------" "----" "----------------------"
+    for item in "${_entries_ref[@]}"; do
+        IFS=':' read -r port proto name <<< "$item"
+        printf "  %-7s %-7s %-4s %s\n" "$port" "$port" "$proto" "$name"
+    done
+    echo
+}
+
 # ─── Port Forwarding (UPnP/NAT-PMP) ───
 network_port_forwarding() {
     msg_header "Port Forwarding Wizard"
@@ -269,6 +322,29 @@ network_port_forwarding() {
         return 0
     fi
 
+    local forward_backend=""
+    local upnp_probe=""
+    upnp_probe="$(upnpc -l 2>&1)"
+    if [[ $? -eq 0 ]] && ! echo "$upnp_probe" | grep -qiE 'No IGD UPnP Device found|No valid UPNP Internet Gateway Device|UPnP Device not found'; then
+        forward_backend="upnp"
+        msg_info "Router mapping backend: UPnP"
+    else
+        if ! command -v natpmpc &>/dev/null; then
+            pkg_install natpmpc >/dev/null 2>&1 || pkg_install libnatpmp >/dev/null 2>&1 || true
+        fi
+
+        if command -v natpmpc &>/dev/null; then
+            forward_backend="natpmp"
+            msg_warn "UPnP gateway not found. Falling back to NAT-PMP."
+        else
+            msg_error "Router auto-port-forwarding unavailable (UPnP/NAT-PMP not detected)"
+            msg_info "UPnP probe: $(echo "$upnp_probe" | head -1)"
+            msg_info "Enable UPnP/NAT-PMP on your router or add manual port forwards"
+            network_print_manual_forward_table "$local_ip" entries
+            return 1
+        fi
+    fi
+
     echo
     msg_info "Detected forward candidates:"
     local i=1
@@ -288,10 +364,12 @@ network_port_forwarding() {
     fi
 
     local success=0 failed=0 fw_opened=0 fw_failed=0
+    local failed_entries=()
+    local first_forward_error=""
     if [[ "$forward_all" -eq 1 ]]; then
         for item in "${entries[@]}"; do
             IFS=':' read -r p proto name <<< "$item"
-            if upnpc -a "$local_ip" "$p" "$p" "$proto" >/dev/null 2>&1; then
+            if network_forward_port "$forward_backend" "$local_ip" "$p" "$proto"; then
                 msg_ok "Forwarded ${name} on ${p}/${proto}"
                 success=$((success + 1))
 
@@ -302,6 +380,8 @@ network_port_forwarding() {
                 esac
             else
                 msg_warn "Failed to forward ${name} on ${p}/${proto}"
+                failed_entries+=("$item")
+                [[ -z "$first_forward_error" ]] && first_forward_error="$NETWORK_FORWARD_LAST_ERROR"
                 failed=$((failed + 1))
             fi
         done
@@ -309,7 +389,7 @@ network_port_forwarding() {
         for item in "${entries[@]}"; do
             IFS=':' read -r p proto name <<< "$item"
             if tui_confirm "Forward ${name} on ${p}/${proto}?"; then
-                if upnpc -a "$local_ip" "$p" "$p" "$proto" >/dev/null 2>&1; then
+                if network_forward_port "$forward_backend" "$local_ip" "$p" "$proto"; then
                     msg_ok "Forwarded ${name} on ${p}/${proto}"
                     success=$((success + 1))
 
@@ -320,6 +400,8 @@ network_port_forwarding() {
                     esac
                 else
                     msg_warn "Failed to forward ${name} on ${p}/${proto}"
+                    failed_entries+=("$item")
+                    [[ -z "$first_forward_error" ]] && first_forward_error="$NETWORK_FORWARD_LAST_ERROR"
                     failed=$((failed + 1))
                 fi
             fi
@@ -335,7 +417,9 @@ network_port_forwarding() {
         msg_warn "${fw_failed} local firewall rules could not be added"
     fi
     if [[ "$failed" -gt 0 ]]; then
+        [[ -n "$first_forward_error" ]] && msg_warn "Router reply: ${first_forward_error}"
         msg_info "If mappings fail, check router UPnP/NAT-PMP settings and run: upnpc -l"
+        network_print_manual_forward_table "$local_ip" failed_entries
     fi
     msg_info "If website access still fails, verify service is listening: ss -tulpen | grep ':80\\|:443'"
     return 0
