@@ -93,7 +93,7 @@ sudo s4dbox help         # Show help
 
 | App | Description |
 |-----|-------------|
-| **CLI Tools Bundle** | 7z, ffmpeg, mediainfo, mktorrent, mkvinfo, unrar, unzip |
+| **CLI Tools Bundle** | 7z, ffmpeg, mediainfo, mktorrent, mkvtoolnix, unrar, unzip |
 
 ### Network and Remote Access
 

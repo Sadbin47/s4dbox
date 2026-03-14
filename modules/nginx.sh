@@ -233,10 +233,8 @@ nginx_jellyseerr() {
 }
 
 nginx_autobrr() {
-    local port
-    port="$(config_get S4D_AUTOBRR_PORT 7474)"
-    nginx_create_proxy "autobrr" "$port" "/autobrr"
-    msg_ok "Nginx proxy configured for autobrr"
+    rm -f /etc/nginx/sites-available/apps/autobrr.conf 2>/dev/null || true
+    msg_warn "autobrr subpath proxy disabled; use direct port access"
 }
 
 nginx_maketorrent_webui() {
@@ -254,10 +252,8 @@ nginx_nextcloud() {
 }
 
 nginx_cloudreve() {
-    local port
-    port="$(config_get S4D_CLOUDREVE_PORT 5212)"
-    nginx_create_proxy "cloudreve" "$port" "/cloudreve"
-    msg_ok "Nginx proxy configured for Cloudreve"
+    rm -f /etc/nginx/sites-available/apps/cloudreve.conf 2>/dev/null || true
+    msg_warn "Cloudreve subpath proxy disabled; use direct port access"
 }
 
 nginx_qui() {
@@ -292,8 +288,8 @@ nginx_setup_all_installed_proxies() {
     local app
     local proxy_apps=(
         qbittorrent rutorrent jellyfin plex filebrowser
-        sonarr prowlarr jackett jellyseerr autobrr maketorrent_webui
-        nextcloud cloudreve qui vnc_desktop filezilla_gui jdownloader2_gui
+        sonarr prowlarr jackett jellyseerr maketorrent_webui
+        nextcloud qui vnc_desktop filezilla_gui jdownloader2_gui
     )
 
     for app in "${proxy_apps[@]}"; do

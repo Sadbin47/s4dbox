@@ -4,7 +4,7 @@
 install_ssh_tools() {
     msg_step "Installing CLI tools bundle"
 
-    local tools=(7z ffmpeg mediainfo mktorrent mkvinfo unrar unzip)
+    local tools=(7z ffmpeg mediainfo mktorrent mkvtoolnix unrar unzip)
     local pkglist=()
 
     case "$S4D_DISTRO_FAMILY" in

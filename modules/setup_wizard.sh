@@ -99,12 +99,8 @@ s4d_setup_access_url() {
             echo "http://${ip}:${port}"
             ;;
         autobrr)
-            if [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]]; then
-                echo "http://${ip}/autobrr"
-            else
-                port="$(config_get S4D_AUTOBRR_PORT 7474)"
-                echo "http://${ip}:${port}"
-            fi
+            port="$(config_get S4D_AUTOBRR_PORT 7474)"
+            echo "http://${ip}:${port}"
             ;;
         vnc_desktop)
             port="$(config_get S4D_VNC_WEB_PORT 6080)"
@@ -123,12 +119,8 @@ s4d_setup_access_url() {
             echo "http://${ip}:${port}"
             ;;
         cloudreve)
-            if [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]]; then
-                echo "http://${ip}/cloudreve"
-            else
-                port="$(config_get S4D_CLOUDREVE_PORT 5212)"
-                echo "http://${ip}:${port}"
-            fi
+            port="$(config_get S4D_CLOUDREVE_PORT 5212)"
+            echo "http://${ip}:${port}"
             ;;
         qui)
             port="$(config_get S4D_QUI_PORT 7476)"
@@ -173,11 +165,14 @@ s4d_setup_setup_info() {
         qbittorrent|rutorrent|sonarr|prowlarr|jackett|qui)
             echo "Configure from web UI"
             ;;
-        jellyfin|plex|nextcloud|jellyseerr|cloudreve)
+        jellyfin|plex|nextcloud|jellyseerr)
             echo "Finish first-run wizard"
             ;;
+        cloudreve)
+            echo "Use direct port and finish first-run wizard"
+            ;;
         autobrr)
-            echo "Web UI setup (/autobrr if nginx)"
+            echo "Use direct port (nginx subpath disabled)"
             ;;
         autodl_irssi)
             echo "Install/configure inside irssi + rTorrent"
