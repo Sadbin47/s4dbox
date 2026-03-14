@@ -471,6 +471,33 @@ app_repair_webapps() {
     tui_pause
 }
 
+app_repair_webapps_auto() {
+    msg_step "Auto-repairing installed web apps"
+
+    local installed app port ok=0 bad=0
+    installed="$(app_list_installed)"
+
+    [[ -z "$installed" ]] && return 0
+
+    while IFS= read -r app; do
+        port="$(app_get_web_port "$app")"
+        [[ -z "$port" ]] && continue
+
+        app_restart "$app" >/dev/null 2>&1 || true
+        sleep 1
+
+        if app_webui_reachable "$app"; then
+            ok=$((ok + 1))
+        else
+            bad=$((bad + 1))
+            msg_warn "${app} still unreachable on localhost:${port}"
+        fi
+    done <<< "$installed"
+
+    msg_info "Auto-repair summary: ${ok} reachable, ${bad} failing"
+    return 0
+}
+
 s4d_uninstall_all() {
     clear
     msg_header "Uninstall s4dbox (Purge All)"

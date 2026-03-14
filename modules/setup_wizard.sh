@@ -145,6 +145,29 @@ s4d_setup_print_cred_line() {
     printf "  ${BOLD}${YELLOW}│${RESET}  %-54.54s${BOLD}${YELLOW}│${RESET}\n" "$text"
 }
 
+s4d_setup_preflight_runtime() {
+    msg_step "Runtime preflight"
+
+    if command -v systemctl &>/dev/null; then
+        systemctl enable --now containerd docker >/dev/null 2>&1 || true
+
+        if systemctl is-active docker &>/dev/null; then
+            msg_ok "Docker service is active"
+            docker info >/dev/null 2>&1 || msg_warn "Docker active but docker info failed"
+        else
+            msg_warn "Docker service is inactive (will be auto-started when Docker apps install)"
+        fi
+    else
+        msg_warn "Systemd not available; skipping docker runtime preflight"
+    fi
+}
+
+s4d_setup_postflight_health() {
+    msg_step "Post-install health checks"
+    app_repair_webapps_auto || true
+    network_webui_doctor || true
+}
+
 # ─── First-Time Setup ───
 first_time_setup() {
     clear
@@ -165,6 +188,9 @@ first_time_setup() {
     spinner_start "Installing core dependencies"
     install_core_deps 2>/dev/null
     spinner_stop 0
+
+    # Preflight runtime bootstrap requested by users for fresh servers.
+    s4d_setup_preflight_runtime
 
     # User setup
     local username
@@ -217,6 +243,9 @@ first_time_setup() {
     if tui_confirm "Configure router port forwarding now? (This exposes selected ports to the public internet)"; then
         network_port_forwarding || true
     fi
+
+    # Auto-heal and diagnose web apps so setup exits with actionable state.
+    s4d_setup_postflight_health
 
     echo
 
