@@ -45,25 +45,36 @@ install_filebrowser() {
 
     # Recreate DB on install/reinstall so configured credentials match what user enters now.
     rm -f /etc/filebrowser/filebrowser.db
-    "$fb_bin" config init --database /etc/filebrowser/filebrowser.db 2>/dev/null || true
+    "$fb_bin" config init --database /etc/filebrowser/filebrowser.db >/dev/null 2>&1 || true
     "$fb_bin" config set --database /etc/filebrowser/filebrowser.db \
         --address 0.0.0.0 \
         --port "$port" \
-        --root "/home/${username}" 2>/dev/null
+        --root "/home/${username}" >/dev/null 2>&1
     
     # Create admin user
     local fb_password
-    fb_password="$(tui_password "FileBrowser admin password")"
-    if [[ -z "$fb_password" ]]; then
-        fb_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)"
-        msg_warn "No FileBrowser password entered; generated a random password"
-    fi
+    while true; do
+        fb_password="$(tui_password "FileBrowser admin password")"
+        if [[ -z "$fb_password" ]]; then
+            fb_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)"
+            msg_warn "No FileBrowser password entered; generated a random password"
+            break
+        fi
+
+        if [[ ${#fb_password} -lt 12 ]]; then
+            msg_warn "FileBrowser requires at least 12 characters for password"
+            continue
+        fi
+
+        break
+    done
     
     if ! "$fb_bin" users add "$fb_user" "$fb_password" --perm.admin \
         --database /etc/filebrowser/filebrowser.db 2>/dev/null; then
         if ! "$fb_bin" users update "$fb_user" --password "$fb_password" \
-            --database /etc/filebrowser/filebrowser.db 2>/dev/null; then
+            --perm.admin --database /etc/filebrowser/filebrowser.db 2>/dev/null; then
             msg_error "Failed to create/update FileBrowser admin credentials"
+            msg_info "Try manually: ${fb_bin} users add ${fb_user} '<PASSWORD>' --perm.admin --database /etc/filebrowser/filebrowser.db"
             return 1
         fi
     fi
