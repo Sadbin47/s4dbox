@@ -225,6 +225,11 @@ network_forward_port() {
         return 1
     fi
 
+    if [[ "$backend" == "natpmp" ]] && ! echo "$output" | grep -qiE 'Mapped public port|public address|is redirected'; then
+        NETWORK_FORWARD_LAST_ERROR="$(echo "$output" | grep -m1 -E 'TRY AGAIN|timed out|refused|error|failed' || echo "$NETWORK_FORWARD_LAST_ERROR")"
+        return 1
+    fi
+
     return 0
 }
 
@@ -245,6 +250,166 @@ network_print_manual_forward_table() {
         printf "  %-7s %-7s %-4s %s\n" "$port" "$port" "$proto" "$name"
     done
     echo
+}
+
+network_open_firewall_for_entries() {
+    local -n _entries_ref=$1
+    local item port proto name
+    local opened=0 failed=0
+
+    for item in "${_entries_ref[@]}"; do
+        IFS=':' read -r port proto name <<< "$item"
+        network_firewall_allow_port "$port" "$proto"
+        case $? in
+            0)
+                msg_ok "Opened firewall for ${name} on ${port}/${proto}"
+                opened=$((opened + 1))
+                ;;
+            1)
+                msg_warn "Could not open firewall for ${name} on ${port}/${proto}"
+                failed=$((failed + 1))
+                ;;
+        esac
+    done
+
+    msg_info "Firewall update completed: ${opened} opened, ${failed} failed"
+}
+
+network_is_private_ip() {
+    local ip="$1"
+    [[ "$ip" =~ ^10\. ]] && return 0
+    [[ "$ip" =~ ^192\.168\. ]] && return 0
+    [[ "$ip" =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\. ]] && return 0
+    [[ "$ip" =~ ^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\. ]] && return 0
+    [[ "$ip" == "127.0.0.1" ]] && return 0
+    return 1
+}
+
+network_firewall_port_state() {
+    local port="$1"
+    local proto="${2,,}"
+    local svc_ports svc_services
+
+    if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -qi '^Status: active'; then
+        if ufw status 2>/dev/null | grep -qiE "(^|[[:space:]])${port}/${proto}([[:space:]]|$)"; then
+            echo "open"
+        else
+            echo "closed"
+        fi
+        return
+    fi
+
+    if command -v firewall-cmd &>/dev/null && firewall-cmd --state &>/dev/null; then
+        svc_ports="$(firewall-cmd --list-ports 2>/dev/null || true)"
+        svc_services="$(firewall-cmd --list-services 2>/dev/null || true)"
+
+        if echo "$svc_ports" | grep -qiE "(^|[[:space:]])${port}/${proto}([[:space:]]|$)"; then
+            echo "open"
+            return
+        fi
+
+        if [[ "$proto" == "tcp" && "$port" == "80" ]] && echo "$svc_services" | grep -qw "http"; then
+            echo "open"
+            return
+        fi
+        if [[ "$proto" == "tcp" && "$port" == "443" ]] && echo "$svc_services" | grep -qw "https"; then
+            echo "open"
+            return
+        fi
+
+        echo "closed"
+        return
+    fi
+
+    echo "n/a"
+}
+
+network_webui_doctor() {
+    clear
+    msg_header "WebUI Doctor"
+
+    local installed app port status bind_state http_code http_state fw_state
+    local ip_local ip_public gateway
+    local upnp_state="unavailable"
+    local ok_count=0 warn_count=0 fail_count=0
+
+    ip_local="$(get_local_ip)"
+    gateway="$(ip route | awk '/default/{print $3; exit}')"
+    ip_public="$(curl -s --max-time 5 -4 https://ifconfig.me 2>/dev/null || curl -s --max-time 5 -4 https://api.ipify.org 2>/dev/null)"
+
+    if command -v upnpc &>/dev/null; then
+        if upnpc -l 2>/dev/null | grep -qiE 'No IGD UPnP Device found|No valid UPNP Internet Gateway Device|UPnP Device not found'; then
+            upnp_state="not detected"
+        else
+            upnp_state="detected"
+        fi
+    fi
+
+    printf "  %-16s %s\n" "Local IP:" "${ip_local:-N/A}"
+    printf "  %-16s %s\n" "Public IP:" "${ip_public:-N/A}"
+    printf "  %-16s %s\n" "Gateway:" "${gateway:-N/A}"
+    printf "  %-16s %s\n" "UPnP IGD:" "${upnp_state}"
+    echo
+
+    installed="$(app_list_installed)"
+    if [[ -z "$installed" ]]; then
+        msg_info "No installed applications found"
+        echo
+        return 0
+    fi
+
+    printf "  %-18s %-10s %-6s %-6s %-8s %-8s\n" "App" "Status" "Port" "Bind" "HTTP" "Firewall"
+    printf "  %-18s %-10s %-6s %-6s %-8s %-8s\n" "------------------" "----------" "------" "------" "--------" "--------"
+
+    while IFS= read -r app; do
+        port="$(app_get_web_port "$app")"
+        [[ -z "$port" ]] && continue
+
+        status="$(app_status "$app")"
+
+        if ss -tuln 2>/dev/null | grep -qE "[\.:]${port}[[:space:]]"; then
+            bind_state="yes"
+        else
+            bind_state="no"
+        fi
+
+        http_code="$(curl -sS -m 5 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${port}/" 2>/dev/null || echo 000)"
+        if [[ "$http_code" == "000" ]]; then
+            http_state="down"
+        else
+            http_state="$http_code"
+        fi
+
+        fw_state="$(network_firewall_port_state "$port" "tcp")"
+
+        printf "  %-18s %-10s %-6s %-6s %-8s %-8s\n" "$app" "$status" "$port" "$bind_state" "$http_state" "$fw_state"
+
+        if [[ "$status" == "running" && "$bind_state" == "yes" && "$http_state" != "down" ]]; then
+            ok_count=$((ok_count + 1))
+        elif [[ "$status" == "running" || "$bind_state" == "yes" ]]; then
+            warn_count=$((warn_count + 1))
+        else
+            fail_count=$((fail_count + 1))
+        fi
+    done <<< "$installed"
+
+    echo
+    msg_info "Doctor summary: ${ok_count} healthy, ${warn_count} warning, ${fail_count} failing"
+
+    if [[ -n "$gateway" ]] && ! network_is_private_ip "$gateway"; then
+        msg_warn "Gateway looks provider-managed (${gateway}); router UPnP port-forward is usually unavailable"
+        msg_info "Use provider firewall/NAT panel for public access rules"
+    fi
+
+    if [[ "$upnp_state" != "detected" ]]; then
+        msg_info "UPnP not detected; automatic forwarding may not work in this environment"
+    fi
+
+    echo
+    msg_info "If app is down: Application Manager -> Restart Application"
+    msg_info "If bind=no: check container/service logs (systemctl status, docker ps, journalctl)"
+    msg_info "If firewall=closed: run Security & Firewall setup or open the listed port"
+    return 0
 }
 
 # ─── Port Forwarding (UPnP/NAT-PMP) ───
@@ -324,6 +489,7 @@ network_port_forwarding() {
 
     local forward_backend=""
     local upnp_probe=""
+    local natpmp_probe=""
     upnp_probe="$(upnpc -l 2>&1)"
     if [[ $? -eq 0 ]] && ! echo "$upnp_probe" | grep -qiE 'No IGD UPnP Device found|No valid UPNP Internet Gateway Device|UPnP Device not found'; then
         forward_backend="upnp"
@@ -334,14 +500,27 @@ network_port_forwarding() {
         fi
 
         if command -v natpmpc &>/dev/null; then
-            forward_backend="natpmp"
-            msg_warn "UPnP gateway not found. Falling back to NAT-PMP."
-        else
-            msg_error "Router auto-port-forwarding unavailable (UPnP/NAT-PMP not detected)"
+            natpmp_probe="$(natpmpc 2>&1 || true)"
+            if echo "$natpmp_probe" | grep -qiE 'TRY AGAIN|timed out|refused|error|failed'; then
+                msg_warn "NAT-PMP probe did not respond"
+            else
+                forward_backend="natpmp"
+                msg_warn "UPnP gateway not found. Falling back to NAT-PMP."
+            fi
+        fi
+
+        if [[ -z "$forward_backend" ]]; then
+            msg_error "Router auto-port-forwarding unavailable (UPnP/NAT-PMP not responding)"
             msg_info "UPnP probe: $(echo "$upnp_probe" | head -1)"
-            msg_info "Enable UPnP/NAT-PMP on your router or add manual port forwards"
+            [[ -n "$natpmp_probe" ]] && msg_info "NAT-PMP probe: $(echo "$natpmp_probe" | grep -m1 -E 'TRY AGAIN|timed out|refused|error|failed' || echo 'no response')"
+            msg_info "This is common on VPS/provider networks; use provider firewall/NAT panel instead"
+
+            if tui_confirm "Open local firewall rules for detected ports now?"; then
+                network_open_firewall_for_entries entries
+            fi
+
             network_print_manual_forward_table "$local_ip" entries
-            return 1
+            return 0
         fi
     fi
 
@@ -434,6 +613,7 @@ network_menu() {
             "Listening Ports"
             "VPN Status"
             "Port Forwarding (UPnP/NAT-PMP)"
+            "WebUI Doctor"
             "Install Tailscale"
             "← Back"
         )
@@ -447,7 +627,8 @@ network_menu() {
             2) clear; network_ports; tui_pause ;;
             3) clear; network_vpn_status; tui_pause ;;
             4) clear; network_port_forwarding; tui_pause ;;
-            5) app_install "tailscale"; tui_pause ;;
+            5) clear; network_webui_doctor; tui_pause ;;
+            6) app_install "tailscale"; tui_pause ;;
             *) return ;;
         esac
     done
