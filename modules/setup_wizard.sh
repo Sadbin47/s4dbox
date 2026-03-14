@@ -104,8 +104,12 @@ s4d_setup_access_url() {
             echo "http://${ip}:${port}"
             ;;
         autobrr)
-            port="$(config_get S4D_AUTOBRR_PORT 7474)"
-            echo "http://${ip}:${port}"
+            if [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]]; then
+                echo "http://${ip}/autobrr"
+            else
+                port="$(config_get S4D_AUTOBRR_PORT 7474)"
+                echo "http://${ip}:${port}"
+            fi
             ;;
         vnc_desktop)
             port="$(config_get S4D_VNC_WEB_PORT 6080)"
@@ -124,8 +128,12 @@ s4d_setup_access_url() {
             echo "http://${ip}:${port}"
             ;;
         cloudreve)
-            port="$(config_get S4D_CLOUDREVE_PORT 5212)"
-            echo "http://${ip}:${port}"
+            if [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]]; then
+                echo "http://${ip}/cloudreve"
+            else
+                port="$(config_get S4D_CLOUDREVE_PORT 5212)"
+                echo "http://${ip}:${port}"
+            fi
             ;;
         qui)
             port="$(config_get S4D_QUI_PORT 7476)"
@@ -403,11 +411,17 @@ first_time_setup() {
                 filebrowser)
                     hint="User: ${username} | Pass: set during FileBrowser install"
                     ;;
-                jellyfin|plex|nextcloud|cloudreve|jellyseerr)
+                jellyfin|plex|nextcloud|jellyseerr)
                     hint="Finish web setup wizard on first visit"
                     ;;
-                sonarr|prowlarr|jackett|autobrr|qui)
+                cloudreve)
+                    hint="Finish web setup wizard on first visit (if nginx enabled, use /cloudreve)"
+                    ;;
+                sonarr|prowlarr|jackett|qui)
                     hint="Configure app from the web UI"
+                    ;;
+                autobrr)
+                    hint="Configure app from web UI (if nginx enabled, use /autobrr)"
                     ;;
                 wireguard)
                     hint="Needs /etc/wireguard/wg0.conf before start"
