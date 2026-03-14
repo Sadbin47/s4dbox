@@ -1,10 +1,35 @@
 #!/usr/bin/env bash
 # s4dbox - Shared helpers for Docker-based app installers
 
+s4d_start_docker_runtime() {
+    # Some distros need containerd up first; ignore if absent.
+    systemctl enable containerd 2>/dev/null || true
+    systemctl start containerd 2>/dev/null || true
+
+    systemctl enable docker 2>/dev/null || true
+    if ! systemctl start docker 2>/dev/null; then
+        systemctl restart docker 2>/dev/null || true
+    fi
+
+    if ! systemctl is-active docker &>/dev/null; then
+        msg_error "Docker daemon is not running"
+        msg_info "Check: systemctl status docker"
+        msg_info "Logs:  journalctl -xeu docker.service"
+        return 1
+    fi
+
+    if ! docker info >/dev/null 2>&1; then
+        msg_error "Docker CLI cannot talk to daemon"
+        msg_info "Check: docker info"
+        return 1
+    fi
+
+    return 0
+}
+
 s4d_ensure_docker() {
     if command -v docker &>/dev/null; then
-        systemctl enable docker 2>/dev/null || true
-        systemctl start docker 2>/dev/null || true
+        s4d_start_docker_runtime || return 1
     else
         msg_step "Installing Docker"
         case "$S4D_DISTRO_FAMILY" in
@@ -36,20 +61,7 @@ s4d_ensure_docker() {
             return 1
         fi
 
-        systemctl enable docker 2>/dev/null || true
-        systemctl start docker 2>/dev/null || true
-    fi
-
-    if ! systemctl is-active docker &>/dev/null; then
-        msg_error "Docker daemon is not running"
-        msg_info "Check: systemctl status docker"
-        return 1
-    fi
-
-    if ! docker info >/dev/null 2>&1; then
-        msg_error "Docker CLI cannot talk to the daemon"
-        msg_info "Check: journalctl -xeu docker.service"
-        return 1
+        s4d_start_docker_runtime || return 1
     fi
 
     if docker compose version &>/dev/null; then
@@ -90,6 +102,8 @@ EOF
 
     systemctl daemon-reload
     systemctl enable "s4d-${app}.service" 2>/dev/null || true
+
+    s4d_start_docker_runtime || return 1
 
     if ! systemctl restart "s4d-${app}.service"; then
         msg_error "Failed to start s4d-${app}.service"

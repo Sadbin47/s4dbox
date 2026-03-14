@@ -106,6 +106,14 @@ app_webui_reachable() {
     [[ "$code" != "000" ]]
 }
 
+app_ensure_docker_runtime() {
+    systemctl enable containerd 2>/dev/null || true
+    systemctl start containerd 2>/dev/null || true
+    systemctl enable docker 2>/dev/null || true
+    systemctl start docker 2>/dev/null || true
+    systemctl is-active docker &>/dev/null
+}
+
 # Install an app
 app_install() {
     local app="$1"
@@ -301,6 +309,7 @@ app_status() {
     local container_name
     container_name="$(app_docker_container_name "$app")"
     if [[ -n "$container_name" ]]; then
+        app_ensure_docker_runtime >/dev/null 2>&1 || { echo "stopped"; return; }
         if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -Fxq "$container_name"; then
             echo "running"
         else
@@ -332,6 +341,7 @@ app_restart() {
             ;;
         maketorrent_webui) systemctl restart maketorrent-webui ;;
         sonarr|prowlarr|jackett|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)
+            app_ensure_docker_runtime >/dev/null 2>&1 || true
             systemctl restart "s4d-${app}.service" ;;
         autodl_irssi|ssh_tools)
             msg_info "${app} does not run as a service"

@@ -349,6 +349,9 @@ network_webui_doctor() {
     printf "  %-16s %s\n" "Public IP:" "${ip_public:-N/A}"
     printf "  %-16s %s\n" "Gateway:" "${gateway:-N/A}"
     printf "  %-16s %s\n" "UPnP IGD:" "${upnp_state}"
+    if command -v docker &>/dev/null; then
+        printf "  %-16s %s\n" "Docker daemon:" "$(systemctl is-active docker 2>/dev/null || echo inactive)"
+    fi
     echo
 
     installed="$(app_list_installed)"
@@ -399,6 +402,11 @@ network_webui_doctor() {
     if [[ -n "$gateway" ]] && ! network_is_private_ip "$gateway"; then
         msg_warn "Gateway looks provider-managed (${gateway}); router UPnP port-forward is usually unavailable"
         msg_info "Use provider firewall/NAT panel for public access rules"
+    fi
+
+    if command -v docker &>/dev/null && ! systemctl is-active docker &>/dev/null; then
+        msg_warn "Docker daemon is inactive; Docker-based app WebUIs will fail"
+        msg_info "Run: systemctl enable --now docker"
     fi
 
     if [[ "$upnp_state" != "detected" ]]; then
