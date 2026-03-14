@@ -518,7 +518,7 @@ network_port_forwarding() {
         fi
 
         if [[ -z "$forward_backend" ]]; then
-            msg_error "Router auto-port-forwarding unavailable (UPnP/NAT-PMP not responding)"
+            msg_warn "Router auto-port-forwarding unavailable (UPnP/NAT-PMP not responding)"
             msg_info "UPnP probe: $(echo "$upnp_probe" | head -1)"
             [[ -n "$natpmp_probe" ]] && msg_info "NAT-PMP probe: $(echo "$natpmp_probe" | grep -m1 -E 'TRY AGAIN|timed out|refused|error|failed' || echo 'no response')"
             msg_info "This is common on VPS/provider networks; use provider firewall/NAT panel instead"

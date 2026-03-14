@@ -114,6 +114,18 @@ app_ensure_docker_runtime() {
     systemctl is-active docker &>/dev/null
 }
 
+app_is_docker_managed() {
+    local app="$1"
+    case "$app" in
+        sonarr|prowlarr|jackett|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 app_restart_docker_stack() {
     local app="$1"
     local compose_file="/opt/s4dbox/appsdata/${app}/docker-compose.yml"
@@ -136,6 +148,31 @@ app_restart_docker_stack() {
     fi
 
     return 1
+}
+
+app_boot_docker_apps_auto() {
+    local installed app ok=0 bad=0
+
+    installed="$(app_list_installed)"
+    [[ -z "$installed" ]] && return 0
+
+    app_ensure_docker_runtime >/dev/null 2>&1 || {
+        msg_warn "Docker runtime unavailable; skipping docker app auto-boot"
+        return 1
+    }
+
+    while IFS= read -r app; do
+        app_is_docker_managed "$app" || continue
+        if app_restart_docker_stack "$app"; then
+            ok=$((ok + 1))
+        else
+            bad=$((bad + 1))
+            msg_warn "Auto-boot failed for docker app: ${app}"
+        fi
+    done <<< "$installed"
+
+    msg_info "Docker app auto-boot: ${ok} started, ${bad} failed"
+    [[ $bad -eq 0 ]]
 }
 
 # Install an app
@@ -478,7 +515,7 @@ app_repair_webapps() {
             ok=$((ok + 1))
         else
             msg_warn "${app} still unreachable on localhost:${port}"
-            if [[ "$app" =~ ^(sonarr|prowlarr|jackett|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)$ ]]; then
+            if app_is_docker_managed "$app"; then
                 msg_info "Check: systemctl status s4d-${app}.service"
                 msg_info "Check: docker ps"
                 msg_info "Logs:  docker compose -f /opt/s4dbox/appsdata/${app}/docker-compose.yml logs --tail=80"
@@ -539,6 +576,17 @@ s4d_uninstall_all() {
         return 1
     fi
 
+    local remove_source_dir=0
+    local remove_source_verify
+    if tui_confirm "Also remove current s4dbox source directory (${S4D_BASE_DIR})?"; then
+        remove_source_verify="$(tui_input "Type DELETE to remove source directory" "")"
+        if [[ "$remove_source_verify" == "DELETE" ]]; then
+            remove_source_dir=1
+        else
+            msg_warn "Source directory delete confirmation mismatch; keeping source directory"
+        fi
+    fi
+
     msg_step "Removing installed applications"
     local installed app remove_script
     installed="$(app_list_installed)"
@@ -563,6 +611,18 @@ s4d_uninstall_all() {
 
     msg_step "Stopping s4dbox systemd services"
     local svc
+    local docker_apps=(
+        sonarr prowlarr jackett jellyseerr autobrr nextcloud cloudreve qui
+        vnc_desktop filezilla_gui jdownloader2_gui
+    )
+
+    # Stop loaded units first (active/running), then disable installed unit files.
+    while IFS= read -r svc; do
+        [[ -z "$svc" ]] && continue
+        systemctl stop "$svc" 2>/dev/null || true
+        systemctl disable "$svc" 2>/dev/null || true
+    done < <(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}' | grep '^s4d-.*\.service$' || true)
+
     while IFS= read -r svc; do
         [[ -z "$svc" ]] && continue
         systemctl stop "$svc" 2>/dev/null || true
@@ -580,8 +640,31 @@ s4d_uninstall_all() {
     systemctl disable transmission-daemon transmission 2>/dev/null || true
     systemctl stop maketorrent-webui 2>/dev/null || true
     systemctl disable maketorrent-webui 2>/dev/null || true
+    systemctl stop jellyfin plexmediaserver plex-media-server nginx tailscaled 2>/dev/null || true
+    systemctl disable tailscaled 2>/dev/null || true
+
+    # Tear down docker compose stacks explicitly.
+    local dapp compose_file
+    for dapp in "${docker_apps[@]}"; do
+        compose_file="/opt/s4dbox/appsdata/${dapp}/docker-compose.yml"
+        if [[ -f "$compose_file" && -x "$(command -v docker 2>/dev/null)" ]]; then
+            docker compose -f "$compose_file" down -v --remove-orphans >/dev/null 2>&1 || true
+            docker-compose -f "$compose_file" down -v --remove-orphans >/dev/null 2>&1 || true
+        fi
+    done
+
+    # Remove any remaining containers created by s4dbox naming convention.
+    if command -v docker &>/dev/null; then
+        local s4d_cids
+        s4d_cids="$(docker ps -aq --filter 'name=^s4d-' 2>/dev/null || true)"
+        [[ -n "$s4d_cids" ]] && docker rm -f $s4d_cids >/dev/null 2>&1 || true
+    fi
+
+    # Kill any lingering app processes that may survive service stop.
+    pkill -f 'qbittorrent-nox|rtorrent|filebrowser|transmission-daemon|maketorrent-webui|jellyfin|plexmediaserver|tailscaled|s4d-' 2>/dev/null || true
 
     systemctl daemon-reload
+    systemctl reset-failed >/dev/null 2>&1 || true
 
     msg_step "Removing s4dbox nginx configs"
     local proxy_app
@@ -599,12 +682,18 @@ s4d_uninstall_all() {
     systemctl reload nginx 2>/dev/null || true
 
     msg_step "Removing s4dbox data/config/logs"
+    rm -rf /opt/s4dbox 2>/dev/null || true
     rm -rf /opt/s4dbox/appsdata 2>/dev/null || true
     rm -rf /etc/s4dbox 2>/dev/null || true
+    rm -rf /etc/filebrowser 2>/dev/null || true
     rm -rf /var/log/s4dbox 2>/dev/null || true
     rm -f /usr/local/bin/s4dbox 2>/dev/null || true
 
-    # If running from the installed path, remove it after this process exits.
+    if [[ $remove_source_dir -eq 1 && "$S4D_BASE_DIR" != "/" ]]; then
+        (sleep 1; rm -rf "$S4D_BASE_DIR" >/dev/null 2>&1) &
+    fi
+
+    # If running from the installed path, schedule removal after this process exits.
     if [[ "$S4D_BASE_DIR" == /opt/s4dbox* ]]; then
         (sleep 1; rm -rf /opt/s4dbox >/dev/null 2>&1) &
     fi

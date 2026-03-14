@@ -154,6 +154,7 @@ s4d_setup_preflight_runtime() {
         if systemctl is-active docker &>/dev/null; then
             msg_ok "Docker service is active"
             docker info >/dev/null 2>&1 || msg_warn "Docker active but docker info failed"
+            app_boot_docker_apps_auto || true
         else
             msg_warn "Docker service is inactive (will be auto-started when Docker apps install)"
         fi
@@ -313,6 +314,7 @@ first_time_setup() {
 
         if [[ $needs_action -eq 1 ]]; then
             app_ensure_docker_runtime >/dev/null 2>&1 || true
+            app_boot_docker_apps_auto >/dev/null 2>&1 || true
             printf "  ${BOLD}${MAGENTA}Action Required${RESET}\n"
             while IFS= read -r app; do
                 local status
@@ -321,7 +323,13 @@ first_time_setup() {
                 case "$status" in
                     stopped)
                         if tui_confirm "${app} is installed but stopped. Start it now?"; then
-                            if app_restart "$app"; then
+                            if app_is_docker_managed "$app"; then
+                                app_restart_docker_stack "$app"
+                            else
+                                app_restart "$app"
+                            fi
+
+                            if [[ $? -eq 0 ]]; then
                                 msg_ok "${app} started"
                             else
                                 msg_warn "Could not start ${app}. Check: systemctl status"
