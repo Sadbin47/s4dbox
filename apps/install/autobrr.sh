@@ -2,7 +2,7 @@
 # s4dbox - autobrr installer (Docker)
 
 install_autobrr() {
-  local port app_dir compose_file
+    local port app_dir compose_file
 
     source "${S4D_BASE_DIR}/apps/install/docker_helpers.sh"
 
