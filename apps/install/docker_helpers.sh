@@ -120,14 +120,21 @@ EOF
 
     # Validate that compose stack is actually running (not only oneshot service success).
     # Fresh servers may need extra time for image pulls + first boot initialization.
-    local tries=120 total running restarting
+    local tries=120 total running restarting check_count=0
+    msg_info "Waiting for ${app} container(s) to become healthy (first run can take several minutes)..."
     while [[ $tries -gt 0 ]]; do
         total="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps -q 2>/dev/null | wc -l)"
         running="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps --status running -q 2>/dev/null | wc -l)"
         restarting="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps --status restarting -q 2>/dev/null | wc -l)"
 
+        check_count=$((check_count + 1))
+        if (( check_count % 15 == 0 )); then
+            msg_info "${app}: running ${running}/${total}, restarting ${restarting}"
+        fi
+
         # restarting containers are not healthy for WebUI usage and usually lead to 502.
         if [[ "$total" -gt 0 && "$running" -eq "$total" && "$restarting" -eq 0 ]]; then
+            msg_ok "${app} container stack is healthy"
             return 0
         fi
 
