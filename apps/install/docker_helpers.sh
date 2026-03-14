@@ -32,6 +32,64 @@ s4d_install_docker_compose() {
     esac
 }
 
+s4d_open_firewall_for_compose_ports() {
+    local compose_file="$1"
+    local ids cid line mapping proto host_port
+    local -a rules=()
+    local have_ufw=0 have_firewalld=0
+
+    if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -qi '^Status: active'; then
+        have_ufw=1
+    fi
+
+    if command -v firewall-cmd &>/dev/null && firewall-cmd --state &>/dev/null; then
+        have_firewalld=1
+    fi
+
+    if [[ "$have_ufw" -eq 0 && "$have_firewalld" -eq 0 ]]; then
+        return 0
+    fi
+
+    ids="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps -q 2>/dev/null)"
+    [[ -z "$ids" ]] && return 0
+
+    while IFS= read -r cid; do
+        [[ -z "$cid" ]] && continue
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            # Example: 7476/tcp -> 0.0.0.0:7476
+            proto="$(echo "$line" | awk -F'/' '{print $2}' | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+            mapping="$(echo "$line" | awk -F'-> ' '{print $2}')"
+            host_port="$(echo "$mapping" | grep -oE ':[0-9]+' | tail -1 | tr -d ':')"
+
+            if [[ -n "$host_port" && "$host_port" =~ ^[0-9]+$ ]] && [[ "$proto" == "tcp" || "$proto" == "udp" ]]; then
+                rules+=("${host_port}/${proto}")
+            fi
+        done < <(docker port "$cid" 2>/dev/null || true)
+    done <<< "$ids"
+
+    [[ ${#rules[@]} -eq 0 ]] && return 0
+
+    local uniq_rules
+    uniq_rules="$(printf '%s\n' "${rules[@]}" | sort -u)"
+
+    while IFS= read -r rule; do
+        [[ -z "$rule" ]] && continue
+
+        if [[ "$have_ufw" -eq 1 ]]; then
+            ufw allow "$rule" comment "s4dbox docker app" >/dev/null 2>&1 || true
+        fi
+
+        if [[ "$have_firewalld" -eq 1 ]]; then
+            firewall-cmd --permanent --add-port="$rule" >/dev/null 2>&1 || true
+        fi
+    done <<< "$uniq_rules"
+
+    if [[ "$have_firewalld" -eq 1 ]]; then
+        firewall-cmd --reload >/dev/null 2>&1 || true
+    fi
+}
+
 s4d_start_docker_runtime() {
     # Full purge may mask these units; unmask before trying to enable/start.
     systemctl unmask docker docker.service docker.socket 2>/dev/null || true
@@ -196,6 +254,7 @@ EOF
 
         # restarting containers are not healthy for WebUI usage and usually lead to 502.
         if [[ "$total" -gt 0 && "$running" -eq "$total" && "$restarting" -eq 0 ]]; then
+            s4d_open_firewall_for_compose_ports "$compose_file"
             msg_ok "${app} container stack is healthy"
             return 0
         fi
