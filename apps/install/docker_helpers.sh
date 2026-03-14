@@ -146,6 +146,9 @@ EOF
     msg_info "Check: ${S4D_DOCKER_COMPOSE[*]} -f ${compose_file} ps"
     msg_info "Logs:  ${S4D_DOCKER_COMPOSE[*]} -f ${compose_file} logs --tail=80"
     msg_info "Service: systemctl status s4d-${app}.service"
+    echo
+    msg_warn "Recent ${app} container logs:"
+    ${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" logs --tail=80 2>/dev/null || true
     return 1
 }
 

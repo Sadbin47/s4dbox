@@ -2,14 +2,10 @@
 # s4dbox - autobrr installer (Docker)
 
 install_autobrr() {
-    local username uid gid port app_dir compose_file
+  local port app_dir compose_file
 
     source "${S4D_BASE_DIR}/apps/install/docker_helpers.sh"
 
-    username="$(get_seedbox_user)"
-    [[ -z "$username" ]] && username="$(prompt_user_setup)"
-    uid="$(id -u "$username")"
-    gid="$(id -g "$username")"
     port="$(tui_input "autobrr port" "7474")"
 
     s4d_ensure_docker || return 1
@@ -17,13 +13,13 @@ install_autobrr() {
     app_dir="/opt/s4dbox/appsdata/autobrr"
     compose_file="${app_dir}/docker-compose.yml"
     mkdir -p "${app_dir}/config"
+    chmod -R u+rwX,go+rX "${app_dir}" >/dev/null 2>&1 || true
 
     cat > "$compose_file" <<EOF
 services:
   autobrr:
     image: ghcr.io/autobrr/autobrr:latest
     container_name: s4d-autobrr
-    user: "${uid}:${gid}"
     volumes:
       - ${app_dir}/config:/config
     ports:
