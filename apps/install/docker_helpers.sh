@@ -32,6 +32,32 @@ s4d_install_docker_compose() {
     esac
 }
 
+s4d_fix_debian_family_docker_networking() {
+    # S4D_DISTRO_FAMILY=debian covers Debian and Debian-based distros
+    # (Ubuntu, Linux Mint, Pop!_OS, etc.).
+    [[ "$S4D_DISTRO_FAMILY" == "debian" ]] || return 0
+
+    # Docker-published ports require host forwarding path; some Debian VPS images keep it disabled.
+    if [[ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo 0)" != "1" ]]; then
+        sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+        mkdir -p /etc/sysctl.d
+        cat > /etc/sysctl.d/99-s4dbox-docker.conf <<EOF
+net.ipv4.ip_forward=1
+EOF
+        sysctl --system >/dev/null 2>&1 || true
+    fi
+
+    # On Debian + UFW, routed traffic for Docker can be dropped unless forward policy allows it.
+    if command -v ufw &>/dev/null && [[ -f /etc/default/ufw ]]; then
+        if grep -q '^DEFAULT_FORWARD_POLICY="DROP"' /etc/default/ufw; then
+            sed -i 's/^DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
+            ufw reload >/dev/null 2>&1 || true
+        fi
+    fi
+
+    return 0
+}
+
 s4d_open_firewall_for_compose_ports() {
     local compose_file="$1"
     local ids cid line mapping proto host_port
@@ -118,6 +144,8 @@ s4d_start_docker_runtime() {
         msg_info "Check: docker info"
         return 1
     fi
+
+    s4d_fix_debian_family_docker_networking
 
     return 0
 }
