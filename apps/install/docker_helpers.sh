@@ -113,12 +113,14 @@ EOF
     fi
 
     # Validate that compose stack is actually running (not only oneshot service success).
-    local tries=10 total running
+    # Fresh servers may need extra time for image pulls + first boot initialization.
+    local tries=120 total running restarting
     while [[ $tries -gt 0 ]]; do
         total="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps -q 2>/dev/null | wc -l)"
         running="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps --status running -q 2>/dev/null | wc -l)"
+        restarting="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps --status restarting -q 2>/dev/null | wc -l)"
 
-        if [[ "$total" -gt 0 && "$running" -ge "$total" ]]; then
+        if [[ "$total" -gt 0 && $((running + restarting)) -ge "$total" ]]; then
             return 0
         fi
 
@@ -129,6 +131,7 @@ EOF
     msg_error "Container stack for ${app} is not healthy"
     msg_info "Check: ${S4D_DOCKER_COMPOSE[*]} -f ${compose_file} ps"
     msg_info "Logs:  ${S4D_DOCKER_COMPOSE[*]} -f ${compose_file} logs --tail=80"
+    msg_info "Service: systemctl status s4d-${app}.service"
     return 1
 }
 

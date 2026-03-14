@@ -663,6 +663,48 @@ s4d_uninstall_all() {
     # Kill any lingering app processes that may survive service stop.
     pkill -f 'qbittorrent-nox|rtorrent|filebrowser|transmission-daemon|maketorrent-webui|jellyfin|plexmediaserver|tailscaled|s4d-' 2>/dev/null || true
 
+    msg_step "Stopping security/runtime background services"
+    local bg_svc
+    local bg_services=(
+        fail2ban
+        docker
+        docker.socket
+        containerd
+        containerd.service
+        containerd.socket
+    )
+    for bg_svc in "${bg_services[@]}"; do
+        systemctl stop "$bg_svc" 2>/dev/null || true
+        systemctl disable "$bg_svc" 2>/dev/null || true
+        systemctl mask "$bg_svc" 2>/dev/null || true
+    done
+
+    # Remove common package names across distro families.
+    local bg_pkg
+    local bg_packages=(
+        fail2ban
+        docker
+        docker.io
+        docker-ce
+        docker-ce-cli
+        docker-compose
+        docker-compose-plugin
+        containerd
+        containerd.io
+    )
+    for bg_pkg in "${bg_packages[@]}"; do
+        pkg_remove "$bg_pkg" 2>/dev/null || true
+    done
+
+    # Remove runtime data that can keep stale service/container state.
+    rm -rf /var/lib/docker 2>/dev/null || true
+    rm -rf /etc/docker 2>/dev/null || true
+    rm -rf /var/lib/containerd 2>/dev/null || true
+    rm -rf /etc/containerd 2>/dev/null || true
+    rm -rf /etc/fail2ban 2>/dev/null || true
+    rm -rf /var/lib/fail2ban 2>/dev/null || true
+    rm -rf /var/log/fail2ban* 2>/dev/null || true
+
     systemctl daemon-reload
     systemctl reset-failed >/dev/null 2>&1 || true
 
