@@ -363,8 +363,13 @@ app_status() {
     container_name="$(app_docker_container_name "$app")"
     if [[ -n "$container_name" ]]; then
         app_ensure_docker_runtime >/dev/null 2>&1 || { echo "stopped"; return; }
-        if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -Fxq "$container_name"; then
-            echo "running"
+        if command -v docker &>/dev/null; then
+            local cstate
+            cstate="$(docker inspect -f '{{.State.Status}}' "$container_name" 2>/dev/null || echo "missing")"
+            case "$cstate" in
+                running) echo "running" ;;
+                *) echo "stopped" ;;
+            esac
         else
             echo "stopped"
         fi

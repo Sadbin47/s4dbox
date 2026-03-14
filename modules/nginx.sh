@@ -94,12 +94,20 @@ nginx_create_proxy() {
     
     cat > "/etc/nginx/sites-available/apps/${app_name}.conf" <<EOF
 # s4dbox reverse proxy for ${app_name}
+location = ${location} {
+    return 301 ${location}/;
+}
+
 location ${location}/ {
     proxy_pass http://127.0.0.1:${upstream_port}/;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-Prefix ${location};
+    proxy_connect_timeout 15s;
+    proxy_send_timeout 120s;
+    proxy_read_timeout 120s;
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";

@@ -126,7 +126,8 @@ EOF
         running="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps --status running -q 2>/dev/null | wc -l)"
         restarting="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps --status restarting -q 2>/dev/null | wc -l)"
 
-        if [[ "$total" -gt 0 && $((running + restarting)) -ge "$total" ]]; then
+        # restarting containers are not healthy for WebUI usage and usually lead to 502.
+        if [[ "$total" -gt 0 && "$running" -eq "$total" && "$restarting" -eq 0 ]]; then
             return 0
         fi
 
