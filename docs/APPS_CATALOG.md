@@ -7,7 +7,6 @@ Applications are grouped by function for easier navigation.
 Implementation path: `apps/install/*.sh` and `apps/remove/*.sh`
 
 - `qbittorrent`
-- `transmission`
 - `rtorrent`
 - `rutorrent`
 - `qui`

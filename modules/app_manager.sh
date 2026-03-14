@@ -15,7 +15,6 @@ declare -A S4D_APP_DESC=(
     [tailscale]="Tailscale - VPN / Remote Access"
     [wireguard]="WireGuard - VPN Tools"
     [openvpn]="OpenVPN - VPN Server"
-    [transmission]="Transmission - Torrent Client"
     [autodl_irssi]="autodl-irssi - IRC Auto Downloader"
     [maketorrent_webui]="MakeTorrent WebUI - Torrent Creator"
     [sonarr]="Sonarr V4 - TV Automation"
@@ -34,7 +33,7 @@ declare -A S4D_APP_DESC=(
 
 # Curated install menu order (grouped by purpose for human-friendly UX)
 S4D_INSTALL_MENU_APPS=(
-    "qbittorrent" "transmission" "rtorrent" "rutorrent" "qui"
+    "qbittorrent" "rtorrent" "rutorrent" "qui"
     "jellyfin" "plex" "sonarr" "prowlarr" "jackett" "jellyseerr"
     "filebrowser" "nextcloud" "cloudreve" "maketorrent_webui"
     "autobrr" "autodl_irssi" "ssh_tools"
@@ -73,7 +72,6 @@ app_get_web_port() {
     local app="$1"
     case "$app" in
         qbittorrent) echo "$(config_get S4D_QB_PORT 8080)" ;;
-        transmission) echo "$(config_get S4D_TRANSMISSION_PORT 9091)" ;;
         rutorrent) echo "$(config_get S4D_RUTORRENT_PORT 8081)" ;;
         jellyfin) echo "$(config_get S4D_JELLYFIN_PORT 8096)" ;;
         plex) echo "32400" ;;
@@ -357,13 +355,6 @@ app_status() {
             service_name="s4d-${app}.service"
             ;;
         maketorrent_webui) service_name="maketorrent-webui" ;;
-        transmission)
-            if systemctl list-unit-files | grep -q '^transmission-daemon\.service'; then
-                service_name="transmission-daemon"
-            else
-                service_name="transmission"
-            fi
-            ;;
         *)           service_name="$app" ;;
     esac
 
@@ -403,9 +394,6 @@ app_restart() {
         tailscale)   systemctl restart tailscaled ;;
         wireguard)   systemctl restart wg-quick@wg0 ;;
         openvpn)     systemctl restart openvpn-server@server ;;
-        transmission)
-            systemctl restart transmission-daemon 2>/dev/null || systemctl restart transmission 2>/dev/null
-            ;;
         maketorrent_webui) systemctl restart maketorrent-webui ;;
         sonarr|prowlarr|jackett|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)
             app_restart_docker_stack "$app" ;;
@@ -642,8 +630,6 @@ s4d_uninstall_all() {
     systemctl disable rtorrent@* 2>/dev/null || true
     systemctl stop filebrowser 2>/dev/null || true
     systemctl disable filebrowser 2>/dev/null || true
-    systemctl stop transmission-daemon transmission 2>/dev/null || true
-    systemctl disable transmission-daemon transmission 2>/dev/null || true
     systemctl stop maketorrent-webui 2>/dev/null || true
     systemctl disable maketorrent-webui 2>/dev/null || true
     systemctl stop jellyfin plexmediaserver plex-media-server nginx tailscaled 2>/dev/null || true
@@ -667,7 +653,7 @@ s4d_uninstall_all() {
     fi
 
     # Kill any lingering app processes that may survive service stop.
-    pkill -f 'qbittorrent-nox|rtorrent|filebrowser|transmission-daemon|maketorrent-webui|jellyfin|plexmediaserver|tailscaled|s4d-' 2>/dev/null || true
+    pkill -f 'qbittorrent-nox|rtorrent|filebrowser|maketorrent-webui|jellyfin|plexmediaserver|tailscaled|s4d-' 2>/dev/null || true
 
     msg_step "Stopping security/runtime background services"
     local bg_svc
@@ -717,7 +703,7 @@ s4d_uninstall_all() {
     msg_step "Removing s4dbox nginx configs"
     local proxy_app
     local proxy_apps=(
-        qbittorrent transmission rutorrent jellyfin plex filebrowser
+        qbittorrent rutorrent jellyfin plex filebrowser
         sonarr prowlarr jackett jellyseerr autobrr maketorrent_webui
         nextcloud cloudreve qui vnc_desktop filezilla_gui jdownloader2_gui
     )

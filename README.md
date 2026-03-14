@@ -63,7 +63,6 @@ sudo s4dbox help         # Show help
 | App | Description |
 |-----|-------------|
 | **qBittorrent** | Torrent client with pre-compiled binaries (4.3.9, 4.5.5, 4.6.7, 5.0.3, 5.1.0β1) |
-| **Transmission** | Lightweight torrent client |
 | **rTorrent** | CLI torrent client |
 | **ruTorrent** | rTorrent web UI |
 | **Qui** | Modern torrent web UI |

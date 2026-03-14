@@ -3,7 +3,7 @@
 
 # First-time setup app options and ID mapping (single source of truth)
 declare -a S4D_SETUP_APP_OPTIONS=(
-    "qBittorrent" "Transmission" "rTorrent" "ruTorrent" "Qui"
+    "qBittorrent" "rTorrent" "ruTorrent" "Qui"
     "Jellyfin" "Plex" "Sonarr V4" "Prowlarr" "Jackett" "Jellyseerr"
     "FileBrowser" "Nextcloud" "Cloudreve" "MakeTorrent WebUI"
     "autobrr" "autodl-irssi" "CLI Tools Bundle"
@@ -13,7 +13,6 @@ declare -a S4D_SETUP_APP_OPTIONS=(
 
 declare -A S4D_SETUP_APP_MAP=(
     ["qBittorrent"]="qbittorrent"
-    ["Transmission"]="transmission"
     ["rTorrent"]="rtorrent"
     ["ruTorrent"]="rutorrent"
     ["Qui"]="qui"
@@ -75,10 +74,6 @@ s4d_setup_access_url() {
             ;;
         openvpn)
             echo "openvpn-server@server"
-            ;;
-        transmission)
-            port="$(config_get S4D_TRANSMISSION_PORT 9091)"
-            echo "http://${ip}:${port}/web"
             ;;
         autodl_irssi)
             echo "irssi plugin"
@@ -151,15 +146,10 @@ s4d_setup_access_url() {
 s4d_setup_auth_info() {
     local app="$1"
     local username="$2"
-    local tx_user
 
     case "$app" in
         qbittorrent)
             echo "${username} / set during qB install"
-            ;;
-        transmission)
-            tx_user="$(config_get S4D_TRANSMISSION_USER "$username")"
-            echo "${tx_user} / set during Transmission install"
             ;;
         rutorrent)
             echo "${username} / set during ruTorrent install"
@@ -180,7 +170,7 @@ s4d_setup_setup_info() {
     local app="$1"
 
     case "$app" in
-        qbittorrent|transmission|rutorrent|sonarr|prowlarr|jackett|qui)
+        qbittorrent|rutorrent|sonarr|prowlarr|jackett|qui)
             echo "Configure from web UI"
             ;;
         jellyfin|plex|nextcloud|jellyseerr|cloudreve)
@@ -217,6 +207,8 @@ s4d_setup_setup_info() {
 }
 
 s4d_setup_preflight_runtime() {
+    local username="$1"
+
     msg_step "Runtime preflight"
 
     if command -v systemctl &>/dev/null; then
@@ -228,6 +220,16 @@ s4d_setup_preflight_runtime() {
             app_boot_docker_apps_auto || true
         else
             msg_warn "Docker service is inactive (will be auto-started when Docker apps install)"
+        fi
+
+        if [[ -n "$username" ]] && id "$username" &>/dev/null; then
+            if getent group docker >/dev/null 2>&1; then
+                usermod -aG docker "$username" >/dev/null 2>&1 || msg_warn "Could not add ${username} to docker group"
+            fi
+
+            mkdir -p /opt/s4dbox/appsdata >/dev/null 2>&1 || true
+            chown -R "${username}:${username}" /opt/s4dbox/appsdata >/dev/null 2>&1 || msg_warn "Could not set ownership on /opt/s4dbox/appsdata"
+            chmod 755 /opt/s4dbox/appsdata >/dev/null 2>&1 || msg_warn "Could not set permissions on /opt/s4dbox/appsdata"
         fi
     else
         msg_warn "Systemd not available; skipping docker runtime preflight"
@@ -261,9 +263,6 @@ first_time_setup() {
     install_core_deps 2>/dev/null
     spinner_stop 0
 
-    # Preflight runtime bootstrap requested by users for fresh servers.
-    s4d_setup_preflight_runtime
-
     # User setup
     local username
     if [[ -z "$(get_seedbox_user)" ]]; then
@@ -272,6 +271,9 @@ first_time_setup() {
         username="$(get_seedbox_user)"
         msg_info "Existing user found: ${username}"
     fi
+
+    # Preflight runtime bootstrap requested by users for fresh servers.
+    s4d_setup_preflight_runtime "$username"
 
     echo
 

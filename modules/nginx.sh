@@ -189,13 +189,6 @@ nginx_filebrowser() {
     msg_ok "Nginx proxy configured for FileBrowser"
 }
 
-nginx_transmission() {
-    local port
-    port="$(config_get S4D_TRANSMISSION_PORT 9091)"
-    nginx_create_proxy "transmission" "$port" "/transmission"
-    msg_ok "Nginx proxy configured for Transmission"
-}
-
 nginx_rutorrent() {
     local port
     port="$(config_get S4D_RUTORRENT_PORT 8081)"
@@ -290,7 +283,7 @@ nginx_jdownloader2_gui() {
 nginx_setup_all_installed_proxies() {
     local app
     local proxy_apps=(
-        qbittorrent transmission rutorrent jellyfin plex filebrowser
+        qbittorrent rutorrent jellyfin plex filebrowser
         sonarr prowlarr jackett jellyseerr autobrr maketorrent_webui
         nextcloud cloudreve qui vnc_desktop filezilla_gui jdownloader2_gui
     )

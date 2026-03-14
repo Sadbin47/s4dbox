@@ -457,7 +457,6 @@ network_port_forwarding() {
         network_add_forward_entry entries "$p" "TCP" "qBittorrent-Incoming"
         network_add_forward_entry entries "$p" "UDP" "qBittorrent-Incoming"
     }
-    app_is_installed "transmission" && network_add_forward_entry entries "$(config_get S4D_TRANSMISSION_PORT 9091)" "TCP" "Transmission-WebUI"
     app_is_installed "rutorrent" && network_add_forward_entry entries "$(config_get S4D_RUTORRENT_PORT 8081)" "TCP" "ruTorrent"
     app_is_installed "jellyfin" && network_add_forward_entry entries "$(config_get S4D_JELLYFIN_PORT 8096)" "TCP" "Jellyfin"
     app_is_installed "plex" && network_add_forward_entry entries "32400" "TCP" "Plex"

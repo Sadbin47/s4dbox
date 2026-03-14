@@ -190,7 +190,6 @@ firewall_setup() {
             app_is_installed "plex"       && ufw allow 32400/tcp comment 'Plex' 2>/dev/null
             app_is_installed "filebrowser" && ufw allow "$(config_get S4D_FILEBROWSER_PORT 8090)"/tcp comment 'FileBrowser' 2>/dev/null
             app_is_installed "rutorrent"  && ufw allow "$(config_get S4D_RUTORRENT_PORT 8081)"/tcp comment 'ruTorrent' 2>/dev/null
-            app_is_installed "transmission" && ufw allow "$(config_get S4D_TRANSMISSION_PORT 9091)"/tcp comment 'Transmission' 2>/dev/null
             app_is_installed "sonarr"     && ufw allow "$(config_get S4D_SONARR_PORT 8989)"/tcp comment 'Sonarr' 2>/dev/null
             app_is_installed "prowlarr"   && ufw allow "$(config_get S4D_PROWLARR_PORT 9696)"/tcp comment 'Prowlarr' 2>/dev/null
             app_is_installed "jackett"    && ufw allow "$(config_get S4D_JACKETT_PORT 9117)"/tcp comment 'Jackett' 2>/dev/null
@@ -240,7 +239,6 @@ firewall_setup() {
             app_is_installed "plex"        && firewall-cmd --permanent --add-port="32400/tcp" 2>/dev/null
             app_is_installed "filebrowser" && firewall-cmd --permanent --add-port="$(config_get S4D_FILEBROWSER_PORT 8090)/tcp" 2>/dev/null
             app_is_installed "rutorrent"   && firewall-cmd --permanent --add-port="$(config_get S4D_RUTORRENT_PORT 8081)/tcp" 2>/dev/null
-            app_is_installed "transmission" && firewall-cmd --permanent --add-port="$(config_get S4D_TRANSMISSION_PORT 9091)/tcp" 2>/dev/null
             app_is_installed "sonarr"      && firewall-cmd --permanent --add-port="$(config_get S4D_SONARR_PORT 8989)/tcp" 2>/dev/null
             app_is_installed "prowlarr"    && firewall-cmd --permanent --add-port="$(config_get S4D_PROWLARR_PORT 9696)/tcp" 2>/dev/null
             app_is_installed "jackett"     && firewall-cmd --permanent --add-port="$(config_get S4D_JACKETT_PORT 9117)/tcp" 2>/dev/null
