@@ -54,7 +54,7 @@ install_filebrowser() {
     # Create admin user
     local fb_password
     while true; do
-        fb_password="$(tui_password "FileBrowser admin password")"
+        fb_password="$(tui_password "FileBrowser admin password (Min Char Length: 12)")"
         if [[ -z "$fb_password" ]]; then
             fb_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)"
             msg_warn "No FileBrowser password entered; generated a random password"
@@ -62,22 +62,41 @@ install_filebrowser() {
         fi
 
         if [[ ${#fb_password} -lt 12 ]]; then
-            msg_warn "FileBrowser requires at least 12 characters for password"
+            msg_warn "FileBrowser requires at least 12 characters for password (Min Char Length: 12)"
             continue
         fi
 
         break
     done
     
+    local cred_log fb_user_id
+    cred_log="$(mktemp)"
+
     if ! "$fb_bin" users add "$fb_user" "$fb_password" --perm.admin \
-        --database /etc/filebrowser/filebrowser.db 2>/dev/null; then
-        if ! "$fb_bin" users update "$fb_user" --password "$fb_password" \
-            --perm.admin --database /etc/filebrowser/filebrowser.db 2>/dev/null; then
+        --database /etc/filebrowser/filebrowser.db 2>"$cred_log"; then
+        # Some FileBrowser versions require updating by numeric ID, not username.
+        fb_user_id="$("$fb_bin" users ls --database /etc/filebrowser/filebrowser.db 2>>"$cred_log" | awk -v u="$fb_user" '$0 ~ ("(^|[[:space:]])" u "([[:space:]]|$)") {print $1; exit}')"
+
+        if [[ -n "$fb_user_id" ]]; then
+            "$fb_bin" users update "$fb_user_id" --password "$fb_password" --perm.admin \
+                --database /etc/filebrowser/filebrowser.db 2>>"$cred_log"
+        else
+            "$fb_bin" users update "$fb_user" --password "$fb_password" --perm.admin \
+                --database /etc/filebrowser/filebrowser.db 2>>"$cred_log"
+        fi
+
+        if [[ $? -ne 0 ]]; then
             msg_error "Failed to create/update FileBrowser admin credentials"
+            if [[ -s "$cred_log" ]]; then
+                msg_info "FileBrowser error: $(tail -n 1 "$cred_log")"
+            fi
             msg_info "Try manually: ${fb_bin} users add ${fb_user} '<PASSWORD>' --perm.admin --database /etc/filebrowser/filebrowser.db"
+            rm -f "$cred_log"
             return 1
         fi
     fi
+
+    rm -f "$cred_log"
 
     # Create systemd service — pass address/port on command line too (belt and suspenders)
     cat > /etc/systemd/system/filebrowser.service <<EOF
