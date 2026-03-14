@@ -2,10 +2,16 @@
 # s4dbox - Shared helpers for Docker-based app installers
 
 s4d_start_docker_runtime() {
+    # Full purge may mask these units; unmask before trying to enable/start.
+    systemctl unmask docker docker.service docker.socket 2>/dev/null || true
+    systemctl unmask containerd containerd.service containerd.socket 2>/dev/null || true
+
     # Some distros need containerd up first; ignore if absent.
     systemctl enable containerd 2>/dev/null || true
     systemctl start containerd 2>/dev/null || true
 
+    systemctl enable docker.socket 2>/dev/null || true
+    systemctl start docker.socket 2>/dev/null || true
     systemctl enable docker 2>/dev/null || true
     if ! systemctl start docker 2>/dev/null; then
         systemctl restart docker 2>/dev/null || true
