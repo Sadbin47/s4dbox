@@ -114,6 +114,30 @@ app_ensure_docker_runtime() {
     systemctl is-active docker &>/dev/null
 }
 
+app_restart_docker_stack() {
+    local app="$1"
+    local compose_file="/opt/s4dbox/appsdata/${app}/docker-compose.yml"
+
+    app_ensure_docker_runtime >/dev/null 2>&1 || return 1
+    [[ -f "$compose_file" ]] || return 1
+
+    # Try managed systemd unit first.
+    if systemctl restart "s4d-${app}.service" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Fallback to direct compose for environments where unit state is stale/broken.
+    if docker compose version &>/dev/null; then
+        docker compose -f "$compose_file" up -d >/dev/null 2>&1 && return 0
+    fi
+
+    if command -v docker-compose &>/dev/null; then
+        docker-compose -f "$compose_file" up -d >/dev/null 2>&1 && return 0
+    fi
+
+    return 1
+}
+
 # Install an app
 app_install() {
     local app="$1"
@@ -300,11 +324,6 @@ app_status() {
         *)           service_name="$app" ;;
     esac
 
-    if ! systemctl is-active "$service_name" &>/dev/null; then
-        echo "stopped"
-        return
-    fi
-
     # Docker-backed apps need container health validation, not only systemd oneshot status.
     local container_name
     container_name="$(app_docker_container_name "$app")"
@@ -315,6 +334,11 @@ app_status() {
         else
             echo "stopped"
         fi
+        return
+    fi
+
+    if ! systemctl is-active "$service_name" &>/dev/null; then
+        echo "stopped"
         return
     fi
 
@@ -341,8 +365,7 @@ app_restart() {
             ;;
         maketorrent_webui) systemctl restart maketorrent-webui ;;
         sonarr|prowlarr|jackett|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)
-            app_ensure_docker_runtime >/dev/null 2>&1 || true
-            systemctl restart "s4d-${app}.service" ;;
+            app_restart_docker_stack "$app" ;;
         autodl_irssi|ssh_tools)
             msg_info "${app} does not run as a service"
             ;;

@@ -312,6 +312,7 @@ first_time_setup() {
         done <<< "$installed_apps"
 
         if [[ $needs_action -eq 1 ]]; then
+            app_ensure_docker_runtime >/dev/null 2>&1 || true
             printf "  ${BOLD}${MAGENTA}Action Required${RESET}\n"
             while IFS= read -r app; do
                 local status
