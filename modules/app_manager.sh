@@ -419,12 +419,55 @@ app_menu_status() {
     tui_pause
 }
 
+app_repair_webapps() {
+    clear
+    msg_header "Repair Web Apps"
+
+    local installed app port ok=0 bad=0
+    installed="$(app_list_installed)"
+
+    if [[ -z "$installed" ]]; then
+        msg_info "No installed applications found"
+        tui_pause
+        return
+    fi
+
+    while IFS= read -r app; do
+        port="$(app_get_web_port "$app")"
+        [[ -z "$port" ]] && continue
+
+        msg_step "Checking ${app} (port ${port})"
+        app_restart "$app" >/dev/null 2>&1 || true
+        sleep 2
+
+        if app_webui_reachable "$app"; then
+            msg_ok "${app} WebUI reachable on localhost:${port}"
+            ok=$((ok + 1))
+        else
+            msg_warn "${app} still unreachable on localhost:${port}"
+            if [[ "$app" =~ ^(sonarr|prowlarr|jackett|jellyseerr|autobrr|vnc_desktop|filezilla_gui|jdownloader2_gui|nextcloud|cloudreve|qui)$ ]]; then
+                msg_info "Check: systemctl status s4d-${app}.service"
+                msg_info "Check: docker ps"
+                msg_info "Logs:  docker compose -f /opt/s4dbox/appsdata/${app}/docker-compose.yml logs --tail=80"
+            else
+                msg_info "Check: systemctl status ${app}"
+            fi
+            bad=$((bad + 1))
+        fi
+        echo
+    done <<< "$installed"
+
+    msg_info "Repair summary: ${ok} reachable, ${bad} still failing"
+    tui_pause
+}
+
 app_menu_manage() {
     while true; do
         local options=(
             "Install Application"
             "Remove Application"
             "Application Status"
+            "Repair Web Apps"
             "Restart Application"
             "← Back"
         )
@@ -436,7 +479,8 @@ app_menu_manage() {
             0) app_menu_install ;;
             1) app_menu_remove ;;
             2) app_menu_status ;;
-            3)
+            3) app_repair_webapps ;;
+            4)
                 local installed
                 installed=$(app_list_installed)
                 if [[ -n "$installed" ]]; then

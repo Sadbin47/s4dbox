@@ -40,6 +40,18 @@ s4d_ensure_docker() {
         systemctl start docker 2>/dev/null || true
     fi
 
+    if ! systemctl is-active docker &>/dev/null; then
+        msg_error "Docker daemon is not running"
+        msg_info "Check: systemctl status docker"
+        return 1
+    fi
+
+    if ! docker info >/dev/null 2>&1; then
+        msg_error "Docker CLI cannot talk to the daemon"
+        msg_info "Check: journalctl -xeu docker.service"
+        return 1
+    fi
+
     if docker compose version &>/dev/null; then
         S4D_DOCKER_COMPOSE=(docker compose)
     elif command -v docker-compose &>/dev/null; then
@@ -86,7 +98,24 @@ EOF
         return 1
     fi
 
-    return 0
+    # Validate that compose stack is actually running (not only oneshot service success).
+    local tries=10 total running
+    while [[ $tries -gt 0 ]]; do
+        total="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps -q 2>/dev/null | wc -l)"
+        running="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps --status running -q 2>/dev/null | wc -l)"
+
+        if [[ "$total" -gt 0 && "$running" -ge "$total" ]]; then
+            return 0
+        fi
+
+        sleep 2
+        tries=$((tries - 1))
+    done
+
+    msg_error "Container stack for ${app} is not healthy"
+    msg_info "Check: ${S4D_DOCKER_COMPOSE[*]} -f ${compose_file} ps"
+    msg_info "Logs:  ${S4D_DOCKER_COMPOSE[*]} -f ${compose_file} logs --tail=80"
+    return 1
 }
 
 s4d_remove_compose_service() {
