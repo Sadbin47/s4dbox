@@ -471,6 +471,99 @@ app_repair_webapps() {
     tui_pause
 }
 
+s4d_uninstall_all() {
+    clear
+    msg_header "Uninstall s4dbox (Purge All)"
+    msg_warn "This will remove all s4dbox-managed apps, services, configs, and data."
+    msg_warn "This action is destructive and cannot be undone."
+
+    if ! tui_confirm "Proceed with full uninstall?"; then
+        msg_info "Uninstall cancelled"
+        return 1
+    fi
+
+    local verify
+    verify="$(tui_input "Type PURGE to confirm" "")"
+    if [[ "$verify" != "PURGE" ]]; then
+        msg_warn "Confirmation text mismatch. Uninstall cancelled"
+        return 1
+    fi
+
+    msg_step "Removing installed applications"
+    local installed app remove_script
+    installed="$(app_list_installed)"
+    if [[ -n "$installed" ]]; then
+        while IFS= read -r app; do
+            [[ -z "$app" ]] && continue
+            remove_script="${S4D_APPS_DIR}/remove/${app}.sh"
+            if [[ -f "$remove_script" ]]; then
+                source "$remove_script"
+                if "remove_${app}" >/dev/null 2>&1; then
+                    app_mark_removed "$app"
+                    msg_ok "Removed ${app}"
+                else
+                    msg_warn "Failed removing ${app}; continuing"
+                fi
+            else
+                app_mark_removed "$app"
+                msg_warn "No remover for ${app}; state cleared"
+            fi
+        done <<< "$installed"
+    fi
+
+    msg_step "Stopping s4dbox systemd services"
+    local svc
+    while IFS= read -r svc; do
+        [[ -z "$svc" ]] && continue
+        systemctl stop "$svc" 2>/dev/null || true
+        systemctl disable "$svc" 2>/dev/null || true
+        rm -f "/etc/systemd/system/${svc}"
+    done < <(systemctl list-unit-files --type=service --no-legend 2>/dev/null | awk '{print $1}' | grep '^s4d-.*\.service$' || true)
+
+    systemctl stop qbittorrent-nox@* 2>/dev/null || true
+    systemctl disable qbittorrent-nox@* 2>/dev/null || true
+    systemctl stop rtorrent@* 2>/dev/null || true
+    systemctl disable rtorrent@* 2>/dev/null || true
+    systemctl stop filebrowser 2>/dev/null || true
+    systemctl disable filebrowser 2>/dev/null || true
+    systemctl stop transmission-daemon transmission 2>/dev/null || true
+    systemctl disable transmission-daemon transmission 2>/dev/null || true
+    systemctl stop maketorrent-webui 2>/dev/null || true
+    systemctl disable maketorrent-webui 2>/dev/null || true
+
+    systemctl daemon-reload
+
+    msg_step "Removing s4dbox nginx configs"
+    local proxy_app
+    local proxy_apps=(
+        qbittorrent transmission rutorrent jellyfin plex filebrowser
+        sonarr prowlarr jackett jellyseerr autobrr maketorrent_webui
+        nextcloud cloudreve qui vnc_desktop filezilla_gui jdownloader2_gui
+    )
+    rm -f /etc/nginx/sites-available/s4dbox-main.conf 2>/dev/null || true
+    rm -f /etc/nginx/sites-enabled/s4dbox-main.conf 2>/dev/null || true
+    for proxy_app in "${proxy_apps[@]}"; do
+        rm -f "/etc/nginx/sites-available/apps/${proxy_app}.conf" 2>/dev/null || true
+        rm -f "/etc/nginx/sites-enabled/${proxy_app}.conf" 2>/dev/null || true
+    done
+    systemctl reload nginx 2>/dev/null || true
+
+    msg_step "Removing s4dbox data/config/logs"
+    rm -rf /opt/s4dbox/appsdata 2>/dev/null || true
+    rm -rf /etc/s4dbox 2>/dev/null || true
+    rm -rf /var/log/s4dbox 2>/dev/null || true
+    rm -f /usr/local/bin/s4dbox 2>/dev/null || true
+
+    # If running from the installed path, remove it after this process exits.
+    if [[ "$S4D_BASE_DIR" == /opt/s4dbox* ]]; then
+        (sleep 1; rm -rf /opt/s4dbox >/dev/null 2>&1) &
+    fi
+
+    msg_ok "s4dbox full uninstall completed"
+    msg_info "Your base system remains intact; only s4dbox-managed components were removed"
+    return 0
+}
+
 app_menu_manage() {
     while true; do
         local options=(

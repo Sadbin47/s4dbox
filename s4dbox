@@ -91,6 +91,7 @@ settings_menu() {
             "View Configuration"
             "View Logs"
             "About s4dbox"
+            "Uninstall s4dbox (Purge All)"
             "← Back"
         )
         
@@ -130,6 +131,14 @@ settings_menu() {
                 echo "    - Storage management"
                 echo "    - Network & VPN tools"
                 echo
+                tui_pause
+                ;;
+            5)
+                if s4d_uninstall_all; then
+                    clear
+                    msg_info "s4dbox has been removed. Exiting."
+                    exit 0
+                fi
                 tui_pause
                 ;;
             *) return ;;
@@ -192,6 +201,7 @@ show_help() {
     echo "  tune        Apply system tuning"
     echo "  security    Run security hardening"
     echo "  status      Show installed app status"
+    echo "  uninstall   Remove all s4dbox-managed components"
     echo "  help        Show this help"
     echo
 }
@@ -221,6 +231,9 @@ main() {
             app_list_installed | while IFS= read -r app; do
                 printf "  %-15s [%s]\n" "$app" "$(app_status "$app")"
             done
+            ;;
+        uninstall|purge|remove-all)
+            s4d_uninstall_all
             ;;
         help|-h|--help)
             show_help
