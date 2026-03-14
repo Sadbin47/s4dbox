@@ -6,6 +6,10 @@ install_filebrowser() {
     local username
     username="$(get_seedbox_user)"
     [[ -z "$username" ]] && username="$(prompt_user_setup)"
+
+    local fb_user
+    fb_user="$(tui_input "FileBrowser admin username" "$(config_get S4D_FILEBROWSER_USER "$username")")"
+    [[ -z "$fb_user" ]] && fb_user="$username"
     
     local port
     port="$(tui_input "FileBrowser port" "$(config_get S4D_FILEBROWSER_PORT 8090)")"
@@ -50,12 +54,18 @@ install_filebrowser() {
     # Create admin user
     local fb_password
     fb_password="$(tui_password "FileBrowser admin password")"
-    [[ -z "$fb_password" ]] && fb_password="admin"
+    if [[ -z "$fb_password" ]]; then
+        fb_password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)"
+        msg_warn "No FileBrowser password entered; generated a random password"
+    fi
     
-    if ! "$fb_bin" users add "$username" "$fb_password" --perm.admin \
+    if ! "$fb_bin" users add "$fb_user" "$fb_password" --perm.admin \
         --database /etc/filebrowser/filebrowser.db 2>/dev/null; then
-        "$fb_bin" users update "$username" --password "$fb_password" --perm.admin \
-            --database /etc/filebrowser/filebrowser.db 2>/dev/null || true
+        if ! "$fb_bin" users update "$fb_user" --password "$fb_password" \
+            --database /etc/filebrowser/filebrowser.db 2>/dev/null; then
+            msg_error "Failed to create/update FileBrowser admin credentials"
+            return 1
+        fi
     fi
 
     # Create systemd service — pass address/port on command line too (belt and suspenders)
@@ -76,15 +86,21 @@ EOF
 
     systemctl daemon-reload
     systemctl enable filebrowser 2>/dev/null
-    systemctl restart filebrowser
+    if ! systemctl restart filebrowser; then
+        msg_error "Failed to start FileBrowser service"
+        msg_info "Check: systemctl status filebrowser"
+        return 1
+    fi
 
     config_set "S4D_FILEBROWSER_PORT" "$port"
+    config_set "S4D_FILEBROWSER_USER" "$fb_user"
 
     local ip
     ip="$(get_local_ip)"
     msg_ok "FileBrowser installed"
     msg_info "WebUI: http://${ip}:${port}"
-    msg_info "Username: ${username}"
+    msg_info "Username: ${fb_user}"
+    msg_info "Password: ${fb_password}"
     
     return 0
 }
