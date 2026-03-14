@@ -100,7 +100,7 @@ s4d_setup_access_url() {
             ;;
         autobrr)
             if [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]]; then
-                echo "http://${ip}/autobrr"
+                echo "/autobrr (nginx)"
             else
                 port="$(config_get S4D_AUTOBRR_PORT 7474)"
                 echo "http://${ip}:${port}"
@@ -124,7 +124,7 @@ s4d_setup_access_url() {
             ;;
         cloudreve)
             if [[ "$(config_get S4D_NGINX_ENABLED 0)" == "1" ]]; then
-                echo "http://${ip}/cloudreve"
+                echo "/cloudreve (nginx)"
             else
                 port="$(config_get S4D_CLOUDREVE_PORT 5212)"
                 echo "http://${ip}:${port}"
@@ -369,7 +369,7 @@ first_time_setup() {
             auth_info="$(s4d_setup_auth_info "$app" "$username")"
             setup_info="$(s4d_setup_setup_info "$app")"
 
-            printf "  ${BOLD}${GREEN}│${RESET} %-16s ${BOLD}${GREEN}│${RESET} ${status_color}%-10s${RESET} ${BOLD}${GREEN}│${RESET} %-28.28s ${BOLD}${GREEN}│${RESET} %-36.36s ${BOLD}${GREEN}│${RESET} %-36.36s ${BOLD}${GREEN}│${RESET}\n" "$app" "$status" "$url" "$auth_info" "$setup_info"
+            printf "  ${BOLD}${GREEN}│${RESET} %-16s ${BOLD}${GREEN}│${RESET} ${status_color}%-10s${RESET} ${BOLD}${GREEN}│${RESET} %-28s ${BOLD}${GREEN}│${RESET} %-36.36s ${BOLD}${GREEN}│${RESET} %-36.36s ${BOLD}${GREEN}│${RESET}\n" "$app" "$status" "$url" "$auth_info" "$setup_info"
         done <<< "$installed_apps"
 
         printf "  ${BOLD}${GREEN}└──────────────────┴────────────┴──────────────────────────────┴──────────────────────────────────────┴──────────────────────────────────────┘${RESET}\n"

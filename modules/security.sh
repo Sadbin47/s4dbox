@@ -133,8 +133,15 @@ logpath = %(sshd_log)s
 banaction = iptables-multiport
 EOF
 
-    systemctl enable fail2ban 2>/dev/null
-    systemctl restart fail2ban
+    # Full uninstall may mask this unit; always unmask before enabling.
+    systemctl unmask fail2ban fail2ban.service 2>/dev/null || true
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl enable fail2ban 2>/dev/null || true
+    if ! systemctl restart fail2ban 2>/dev/null; then
+        msg_error "Failed to start fail2ban"
+        msg_info "Check: systemctl status fail2ban --no-pager"
+        return 1
+    fi
     
     msg_ok "Fail2ban installed and configured"
     msg_info "SSH port ${ssh_port} protected (3 attempts, permanent ban)"
