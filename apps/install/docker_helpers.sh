@@ -165,11 +165,29 @@ EOF
     # Validate that compose stack is actually running (not only oneshot service success).
     # Fresh servers may need extra time for image pulls + first boot initialization.
     local tries=120 total running restarting check_count=0
+    local ids cid state
     msg_info "Waiting for ${app} container(s) to become healthy (first run can take several minutes)..."
     while [[ $tries -gt 0 ]]; do
-        total="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps -q 2>/dev/null | wc -l)"
-        running="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps --status running -q 2>/dev/null | wc -l)"
-        restarting="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps --status restarting -q 2>/dev/null | wc -l)"
+        total=0
+        running=0
+        restarting=0
+
+        ids="$(${S4D_DOCKER_COMPOSE[@]} -f "$compose_file" ps -q 2>/dev/null)"
+        if [[ -n "$ids" ]]; then
+            while IFS= read -r cid; do
+                [[ -z "$cid" ]] && continue
+                total=$((total + 1))
+                state="$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || echo unknown)"
+                case "$state" in
+                    running)
+                        running=$((running + 1))
+                        ;;
+                    restarting)
+                        restarting=$((restarting + 1))
+                        ;;
+                esac
+            done <<< "$ids"
+        fi
 
         check_count=$((check_count + 1))
         if (( check_count % 15 == 0 )); then
