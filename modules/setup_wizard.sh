@@ -148,9 +148,72 @@ s4d_setup_access_url() {
     esac
 }
 
-s4d_setup_print_cred_line() {
-    local text="$1"
-    printf "  ${BOLD}${YELLOW}│${RESET}  %-54.54s${BOLD}${YELLOW}│${RESET}\n" "$text"
+s4d_setup_auth_info() {
+    local app="$1"
+    local username="$2"
+    local tx_user
+
+    case "$app" in
+        qbittorrent)
+            echo "${username} / set during qB install"
+            ;;
+        transmission)
+            tx_user="$(config_get S4D_TRANSMISSION_USER "$username")"
+            echo "${tx_user} / set during Transmission install"
+            ;;
+        rutorrent)
+            echo "${username} / set during ruTorrent install"
+            ;;
+        filebrowser)
+            echo "${username} / set during FileBrowser install"
+            ;;
+        autodl_irssi|ssh_tools|rtorrent|tailscale|wireguard|openvpn)
+            echo "N/A"
+            ;;
+        *)
+            echo "set on first web setup"
+            ;;
+    esac
+}
+
+s4d_setup_setup_info() {
+    local app="$1"
+
+    case "$app" in
+        qbittorrent|transmission|rutorrent|sonarr|prowlarr|jackett|qui)
+            echo "Configure from web UI"
+            ;;
+        jellyfin|plex|nextcloud|jellyseerr|cloudreve)
+            echo "Finish first-run wizard"
+            ;;
+        autobrr)
+            echo "Web UI setup (/autobrr if nginx)"
+            ;;
+        autodl_irssi)
+            echo "Install/configure inside irssi + rTorrent"
+            ;;
+        rtorrent)
+            echo "SCGI backend; use with ruTorrent"
+            ;;
+        tailscale)
+            echo "Run: tailscale up"
+            ;;
+        wireguard)
+            echo "Needs /etc/wireguard/wg0.conf"
+            ;;
+        openvpn)
+            echo "Needs /etc/openvpn/server/server.conf"
+            ;;
+        ssh_tools)
+            echo "CLI tools only"
+            ;;
+        maketorrent_webui|vnc_desktop|filezilla_gui|jdownloader2_gui)
+            echo "Open URL and complete in-app setup"
+            ;;
+        *)
+            echo "See app docs"
+            ;;
+    esac
 }
 
 s4d_setup_preflight_runtime() {
@@ -275,24 +338,22 @@ first_time_setup() {
     printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "OS:" "$S4D_OS_PRETTY"
     printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "Architecture:" "$S4D_ARCH"
     printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "IP Address:" "$ip"
-    printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "Seedbox User:" "$username"
+    printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "Login:" "${username} / (password set during user creation)"
     printf "  ${BOLD}${CYAN}│${RESET}  %-16s %-37s${BOLD}${CYAN}│${RESET}\n" "RAM:" "${S4D_MEM_TOTAL_MB}MB"
     printf "  ${BOLD}${CYAN}└────────────────────────────────────────────────────────┘${RESET}\n"
     echo
 
-    # Installed Apps Table
+    # Unified Installed Apps + Access Table
     local installed_apps
     installed_apps="$(app_list_installed)"
 
     if [[ -n "$installed_apps" ]]; then
-        printf "  ${BOLD}${GREEN}┌────────────────────────────────────────────────────────┐${RESET}\n"
-        printf "  ${BOLD}${GREEN}│${RESET}  ${BOLD}Installed Applications${RESET}                               ${BOLD}${GREEN}│${RESET}\n"
-        printf "  ${BOLD}${GREEN}├──────────────────┬────────────┬────────────────────────┤${RESET}\n"
-        printf "  ${BOLD}${GREEN}│${RESET} %-16s ${BOLD}${GREEN}│${RESET} %-10s ${BOLD}${GREEN}│${RESET} %-22s ${BOLD}${GREEN}│${RESET}\n" "Application" "Status" "Access URL"
-        printf "  ${BOLD}${GREEN}├──────────────────┼────────────┼────────────────────────┤${RESET}\n"
+        printf "  ${BOLD}${GREEN}┌──────────────────┬────────────┬──────────────────────────────┬──────────────────────────────────────┬──────────────────────────────────────┐${RESET}\n"
+        printf "  ${BOLD}${GREEN}│${RESET} %-16s ${BOLD}${GREEN}│${RESET} %-10s ${BOLD}${GREEN}│${RESET} %-28s ${BOLD}${GREEN}│${RESET} %-36s ${BOLD}${GREEN}│${RESET} %-36s ${BOLD}${GREEN}│${RESET}\n" "Application" "Status" "Access" "Credentials (user / pass)" "Setup / Notes"
+        printf "  ${BOLD}${GREEN}├──────────────────┼────────────┼──────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────┤${RESET}\n"
 
         while IFS= read -r app; do
-            local status url status_color
+            local status url status_color auth_info setup_info
             status="$(app_status "$app")"
 
             if [[ "$status" == "running" ]]; then
@@ -303,11 +364,13 @@ first_time_setup() {
                 status_color="${RED}"
             fi
             url="$(s4d_setup_access_url "$app" "$ip")"
+            auth_info="$(s4d_setup_auth_info "$app" "$username")"
+            setup_info="$(s4d_setup_setup_info "$app")"
 
-            printf "  ${BOLD}${GREEN}│${RESET} %-16s ${BOLD}${GREEN}│${RESET} ${status_color}%-10s${RESET} ${BOLD}${GREEN}│${RESET} %-22s ${BOLD}${GREEN}│${RESET}\n" "$app" "$status" "$url"
+            printf "  ${BOLD}${GREEN}│${RESET} %-16s ${BOLD}${GREEN}│${RESET} ${status_color}%-10s${RESET} ${BOLD}${GREEN}│${RESET} %-28.28s ${BOLD}${GREEN}│${RESET} %-36.36s ${BOLD}${GREEN}│${RESET} %-36.36s ${BOLD}${GREEN}│${RESET}\n" "$app" "$status" "$url" "$auth_info" "$setup_info"
         done <<< "$installed_apps"
 
-        printf "  ${BOLD}${GREEN}└──────────────────┴────────────┴────────────────────────┘${RESET}\n"
+        printf "  ${BOLD}${GREEN}└──────────────────┴────────────┴──────────────────────────────┴──────────────────────────────────────┴──────────────────────────────────────┘${RESET}\n"
     fi
 
     echo
@@ -379,82 +442,6 @@ first_time_setup() {
         fi
     fi
 
-    echo
-
-    # Credentials
-    printf "  ${BOLD}${YELLOW}┌────────────────────────────────────────────────────────┐${RESET}\n"
-    printf "  ${BOLD}${YELLOW}│${RESET}  ${BOLD}Credentials & Access${RESET}                                ${BOLD}${YELLOW}│${RESET}\n"
-    printf "  ${BOLD}${YELLOW}├────────────────────────────────────────────────────────┤${RESET}\n"
-    s4d_setup_print_cred_line "Seedbox User: ${username}"
-    s4d_setup_print_cred_line "Password: (you set this during user creation)"
-    s4d_setup_print_cred_line ""
-
-    if [[ -n "$installed_apps" ]]; then
-        while IFS= read -r app; do
-            local label url hint tx_user
-            label="${S4D_APP_DESC[$app]:-$app}"
-            label="${label%% - *}"
-            url="$(s4d_setup_access_url "$app" "$ip")"
-            s4d_setup_print_cred_line "${label}: ${url}"
-
-            case "$app" in
-                qbittorrent)
-                    hint="User: ${username} | Pass: set during qB install"
-                    ;;
-                transmission)
-                    tx_user="$(config_get S4D_TRANSMISSION_USER "$username")"
-                    hint="User: ${tx_user} | Pass: set during Transmission install"
-                    ;;
-                rutorrent)
-                    hint="User: ${username} | Pass: set during ruTorrent install"
-                    ;;
-                filebrowser)
-                    hint="User: ${username} | Pass: set during FileBrowser install"
-                    ;;
-                jellyfin|plex|nextcloud|jellyseerr)
-                    hint="Finish web setup wizard on first visit"
-                    ;;
-                cloudreve)
-                    hint="Finish web setup wizard on first visit (if nginx enabled, use /cloudreve)"
-                    ;;
-                sonarr|prowlarr|jackett|qui)
-                    hint="Configure app from the web UI"
-                    ;;
-                autobrr)
-                    hint="Configure app from web UI (if nginx enabled, use /autobrr)"
-                    ;;
-                wireguard)
-                    hint="Needs /etc/wireguard/wg0.conf before start"
-                    ;;
-                openvpn)
-                    hint="Needs /etc/openvpn/server/server.conf before start"
-                    ;;
-                tailscale)
-                    hint="Run: tailscale up (if not already connected)"
-                    ;;
-                autodl_irssi)
-                    hint="Plugin for irssi/rTorrent; no standalone login"
-                    ;;
-                ssh_tools)
-                    hint="CLI tools only; no web login"
-                    ;;
-                maketorrent_webui|vnc_desktop|filezilla_gui|jdownloader2_gui)
-                    hint="Open URL and complete in-app setup"
-                    ;;
-                rtorrent)
-                    hint="Managed via rTorrent session; pair with ruTorrent"
-                    ;;
-                *)
-                    hint="See app documentation for auth/setup"
-                    ;;
-            esac
-
-            s4d_setup_print_cred_line "${hint}"
-            s4d_setup_print_cred_line ""
-        done <<< "$installed_apps"
-    fi
-
-    printf "  ${BOLD}${YELLOW}└────────────────────────────────────────────────────────┘${RESET}\n"
     echo
 
     printf "  ${BOLD}${GREEN}Setup complete!${RESET} Run ${BOLD}sudo s4dbox${RESET} to manage your seedbox.\n"
