@@ -1,6 +1,37 @@
 #!/usr/bin/env bash
 # s4dbox - Shared helpers for Docker-based app installers
 
+s4d_detect_docker_compose_cmd() {
+    if docker compose version &>/dev/null; then
+        S4D_DOCKER_COMPOSE=(docker compose)
+        return 0
+    fi
+
+    if command -v docker-compose &>/dev/null; then
+        S4D_DOCKER_COMPOSE=(docker-compose)
+        return 0
+    fi
+
+    return 1
+}
+
+s4d_install_docker_compose() {
+    case "$S4D_DISTRO_FAMILY" in
+        debian)
+            pkg_install docker-compose-plugin 2>/dev/null || pkg_install docker-compose 2>/dev/null || true
+            ;;
+        arch)
+            pkg_install docker-compose 2>/dev/null || true
+            ;;
+        rhel)
+            pkg_install docker-compose-plugin 2>/dev/null || pkg_install docker-compose 2>/dev/null || true
+            ;;
+        suse)
+            pkg_install docker-compose 2>/dev/null || true
+            ;;
+    esac
+}
+
 s4d_start_docker_runtime() {
     # Full purge may mask these units; unmask before trying to enable/start.
     systemctl unmask docker docker.service docker.socket 2>/dev/null || true
@@ -42,16 +73,13 @@ s4d_ensure_docker() {
             debian)
                 pkg_install ca-certificates 2>/dev/null || true
                 pkg_install docker.io
-                pkg_install docker-compose-plugin 2>/dev/null || true
                 ;;
             arch)
                 pkg_install docker
-                pkg_install docker-compose 2>/dev/null || true
                 ;;
             rhel)
                 pkg_install dnf-plugins-core 2>/dev/null || true
                 pkg_install docker 2>/dev/null || pkg_install docker-ce 2>/dev/null || true
-                pkg_install docker-compose-plugin 2>/dev/null || true
                 ;;
             suse)
                 pkg_install docker
@@ -70,12 +98,28 @@ s4d_ensure_docker() {
         s4d_start_docker_runtime || return 1
     fi
 
-    if docker compose version &>/dev/null; then
-        S4D_DOCKER_COMPOSE=(docker compose)
-    elif command -v docker-compose &>/dev/null; then
-        S4D_DOCKER_COMPOSE=(docker-compose)
-    else
+    if ! s4d_detect_docker_compose_cmd; then
+        msg_step "Installing Docker Compose"
+        s4d_install_docker_compose
+    fi
+
+    if ! s4d_detect_docker_compose_cmd; then
         msg_error "Docker Compose not found (docker compose or docker-compose)"
+        case "$S4D_DISTRO_FAMILY" in
+            debian)
+                msg_info "Try: apt-get update && apt-get install -y docker-compose-plugin"
+                msg_info "Fallback: apt-get install -y docker-compose"
+                ;;
+            arch)
+                msg_info "Try: pacman -S --needed docker-compose"
+                ;;
+            rhel)
+                msg_info "Try: dnf install -y docker-compose-plugin"
+                ;;
+            suse)
+                msg_info "Try: zypper install -y docker-compose"
+                ;;
+        esac
         return 1
     fi
 
