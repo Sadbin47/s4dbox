@@ -208,21 +208,43 @@ s4d_start_docker_runtime() {
 s4d_prepare_rhel_docker_repo() {
     [[ "$S4D_DISTRO_FAMILY" == "rhel" ]] || return 0
 
+    local repo_url
+
+    # Docker publishes Fedora repos directly, while most RHEL derivatives
+    # are reliably served via the CentOS path.
+    case "$S4D_OS_ID" in
+        fedora) repo_url="https://download.docker.com/linux/fedora/docker-ce.repo" ;;
+        *)      repo_url="https://download.docker.com/linux/centos/docker-ce.repo" ;;
+    esac
+
     # Install config-manager when available, then add Docker CE repo.
     pkg_install dnf-plugins-core 2>/dev/null || true
     pkg_install yum-utils 2>/dev/null || true
 
     if command -v dnf &>/dev/null; then
-        dnf config-manager --add-repo "https://download.docker.com/linux/${S4D_OS_ID}/docker-ce.repo" >/dev/null 2>&1 \
-            || dnf config-manager --add-repo "https://download.docker.com/linux/centos/docker-ce.repo" >/dev/null 2>&1 \
-            || true
+        dnf config-manager --add-repo "$repo_url" >/dev/null 2>&1 || true
     elif command -v yum-config-manager &>/dev/null; then
-        yum-config-manager --add-repo "https://download.docker.com/linux/${S4D_OS_ID}/docker-ce.repo" >/dev/null 2>&1 \
-            || yum-config-manager --add-repo "https://download.docker.com/linux/centos/docker-ce.repo" >/dev/null 2>&1 \
-            || true
+        yum-config-manager --add-repo "$repo_url" >/dev/null 2>&1 || true
     fi
 
     return 0
+}
+
+s4d_install_docker_fallback_script() {
+    local script_url="https://get.docker.com"
+
+    # Last-resort fallback for distros where package naming/repo metadata differs.
+    if command -v curl &>/dev/null; then
+        curl -fsSL "$script_url" | sh >/dev/null 2>&1 || return 1
+        return 0
+    fi
+
+    if command -v wget &>/dev/null; then
+        wget -qO- "$script_url" | sh >/dev/null 2>&1 || return 1
+        return 0
+    fi
+
+    return 1
 }
 
 s4d_ensure_docker() {
@@ -251,9 +273,19 @@ s4d_ensure_docker() {
                 if ! command -v docker &>/dev/null; then
                     pkg_install docker 2>/dev/null || pkg_install moby-engine 2>/dev/null || true
                 fi
+
+                if ! command -v docker &>/dev/null; then
+                    msg_info "Package install did not provide Docker; trying official Docker installer script"
+                    s4d_install_docker_fallback_script || true
+                fi
                 ;;
             suse)
                 pkg_install docker
+
+                if ! command -v docker &>/dev/null; then
+                    msg_info "Package install did not provide Docker; trying official Docker installer script"
+                    s4d_install_docker_fallback_script || true
+                fi
                 ;;
             *)
                 msg_error "Unsupported distro for docker install: ${S4D_DISTRO_FAMILY}"

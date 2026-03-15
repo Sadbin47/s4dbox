@@ -51,7 +51,7 @@ detect_distro_family() {
             S4D_DISTRO_FAMILY="debian" ;;
         arch|manjaro|endeavouros|garuda|artix)
             S4D_DISTRO_FAMILY="arch" ;;
-        fedora|rhel|centos|rocky|alma|ol|amzn)
+        fedora|rhel|centos|rocky|alma|almalinux|ol|amzn)
             S4D_DISTRO_FAMILY="rhel" ;;
         opensuse*|sles)
             S4D_DISTRO_FAMILY="suse" ;;
