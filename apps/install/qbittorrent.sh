@@ -320,7 +320,12 @@ QBCONF
     spinner_stop 0
 
     # Start service
-    systemctl start "qbittorrent-nox@${username}"
+    if ! systemctl restart "qbittorrent-nox@${username}"; then
+        msg_error "Failed to start qbittorrent-nox@${username}.service"
+        msg_info "Check: systemctl status qbittorrent-nox@${username}.service"
+        msg_info "Logs:  journalctl -xeu qbittorrent-nox@${username}.service"
+        return 1
+    fi
     
     # Save config
     config_set "S4D_QB_PORT" "$qb_port"

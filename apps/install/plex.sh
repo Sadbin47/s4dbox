@@ -5,6 +5,7 @@ install_plex() {
     local username
     username="$(get_seedbox_user)"
     [[ -z "$username" ]] && username="$(prompt_user_setup)"
+    local install_rc=0
 
     msg_step "Installing Plex Media Server"
 
@@ -18,7 +19,8 @@ install_plex() {
             
             spinner_start "Installing Plex"
             pkg_install plexmediaserver
-            spinner_stop $?
+            install_rc=$?
+            spinner_stop $install_rc
             ;;
         arch)
             spinner_start "Installing Plex"
@@ -71,14 +73,28 @@ EOF
             spinner_stop 0
             
             spinner_start "Installing Plex"
-            pkg_install plexmediaserver
-            spinner_stop $?
+            if command -v dnf &>/dev/null; then
+                dnf install -y -q --disablerepo=jellyfin plexmediaserver >/dev/null 2>&1
+                install_rc=$?
+            elif command -v yum &>/dev/null; then
+                yum install -y -q --disablerepo=jellyfin plexmediaserver >/dev/null 2>&1
+                install_rc=$?
+            else
+                pkg_install plexmediaserver
+                install_rc=$?
+            fi
+            spinner_stop $install_rc
             ;;
         *)
             msg_error "Unsupported distro family: $S4D_DISTRO_FAMILY"
             return 1
             ;;
     esac
+
+    if [[ "$install_rc" -ne 0 ]]; then
+        msg_error "Plex package installation failed"
+        return 1
+    fi
 
     # Create media directories
     mkdir -p "/home/${username}/media/"{movies,shows,music}
@@ -94,10 +110,16 @@ EOF
     done
     
     if [[ -n "$plex_svc" ]]; then
-        systemctl enable "$plex_svc" 2>/dev/null
-        systemctl start "$plex_svc" 2>/dev/null
+        systemctl enable "$plex_svc" 2>/dev/null || true
+        if ! systemctl start "$plex_svc" 2>/dev/null; then
+            msg_error "Failed to start ${plex_svc}"
+            msg_info "Check: systemctl status ${plex_svc}"
+            msg_info "Logs:  journalctl -xeu ${plex_svc}"
+            return 1
+        fi
     else
-        msg_warn "Plex service not found. You may need to start it manually."
+        msg_error "Plex service not found after installation"
+        return 1
     fi
     
     config_set "S4D_PLEX_PORT" "32400"

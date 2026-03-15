@@ -205,6 +205,26 @@ s4d_start_docker_runtime() {
     return 0
 }
 
+s4d_prepare_rhel_docker_repo() {
+    [[ "$S4D_DISTRO_FAMILY" == "rhel" ]] || return 0
+
+    # Install config-manager when available, then add Docker CE repo.
+    pkg_install dnf-plugins-core 2>/dev/null || true
+    pkg_install yum-utils 2>/dev/null || true
+
+    if command -v dnf &>/dev/null; then
+        dnf config-manager --add-repo "https://download.docker.com/linux/${S4D_OS_ID}/docker-ce.repo" >/dev/null 2>&1 \
+            || dnf config-manager --add-repo "https://download.docker.com/linux/centos/docker-ce.repo" >/dev/null 2>&1 \
+            || true
+    elif command -v yum-config-manager &>/dev/null; then
+        yum-config-manager --add-repo "https://download.docker.com/linux/${S4D_OS_ID}/docker-ce.repo" >/dev/null 2>&1 \
+            || yum-config-manager --add-repo "https://download.docker.com/linux/centos/docker-ce.repo" >/dev/null 2>&1 \
+            || true
+    fi
+
+    return 0
+}
+
 s4d_ensure_docker() {
     if command -v docker &>/dev/null; then
         s4d_start_docker_runtime || return 1
@@ -219,8 +239,18 @@ s4d_ensure_docker() {
                 pkg_install docker
                 ;;
             rhel)
-                pkg_install dnf-plugins-core 2>/dev/null || true
-                pkg_install docker 2>/dev/null || pkg_install docker-ce 2>/dev/null || true
+                s4d_prepare_rhel_docker_repo
+
+                # Prefer Docker CE packages, then fall back to distro-provided engines.
+                pkg_install docker-ce 2>/dev/null || true
+                pkg_install docker-ce-cli 2>/dev/null || true
+                pkg_install containerd.io 2>/dev/null || true
+                pkg_install docker-buildx-plugin 2>/dev/null || true
+                pkg_install docker-compose-plugin 2>/dev/null || true
+
+                if ! command -v docker &>/dev/null; then
+                    pkg_install docker 2>/dev/null || pkg_install moby-engine 2>/dev/null || true
+                fi
                 ;;
             suse)
                 pkg_install docker
